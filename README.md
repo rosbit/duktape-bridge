@@ -97,7 +97,6 @@ JavaScript calling Go function is also easy. In your Go code, register a functio
 ```go
 package main
 
-import "fmt"
 import js "github.com/rosbit/duktape-bridge/duk-bridge-go"
 
 // function to be called by JS
@@ -148,7 +147,6 @@ The Go code calls the js
 ```go
 package main
 
-import "fmt"
 import js "github.com/rosbit/duktape-bridge/duk-bridge-go"
 
 func main() {
@@ -174,9 +172,9 @@ The Go plugin module implementation:
 ```go
 package main
 
-type struct Test{}
+type Test struct{}
 
-func NewGoModule() *Test {
+func NewGoModule() interface{} {
 	return &Test{}
 }
 
@@ -196,7 +194,8 @@ copy it to the `modules` subdirectory. now run the main Go app.
 
 Not all Go packages could become js module. There are some limitations:
 
- - function NewGoModule() must be in the module, and it returns a pointer to struct.
+ - function NewGoModule with prototype `func NewGoModule() interface{}` must be in the module,
+   and it returns a pointer to struct.
  - Though as if function NewGoModule() will be called multi-times, in fact Duktape engine will
    cache the required module and it is called **only once** even if you `require` it multi-times.
    So don't declare module specific variables in struct. Only read only constants are acceptable.
@@ -211,13 +210,13 @@ Not all Go packages could become js module. There are some limitations:
    in any C/C++ project.
  - Duktape bridge for Java is under the subdiretory `duk-bridge-java`, run `make` to
    create `dukbridge.jar` and `libdukjs.so`. Then you can run
-   
+ 
    `java -jar dukbridge.jar -Djava.library.path=. <file.js> <func_name>`
-   
+ 
    to hava a test.
  - Of course, with duktape bridge for C, one can implement duktape bridge for
    other language like Python.
-   
+ 
 ### Lua vs. Dutakpe
 
  - Duktape borrows a lot from Lua conceptually. The usage of Duktape API
