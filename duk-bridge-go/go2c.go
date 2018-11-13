@@ -80,10 +80,6 @@ func toPointerArray(args *unsafe.Pointer, length int) []unsafe.Pointer {
  */
 //export go_resultReceived
 func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, res_len C.size_t) {
-	if res_len == 0 {
-		return
-	}
-
 	pRes := (*interface{})(udd)
 	switch res_type {
 	case C.rt_none:
@@ -91,8 +87,9 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 	case C.rt_bool:
 		*pRes = uint64(uintptr(res)) != 0
 	case C.rt_double:
-		p := uint64(uintptr(res))
-		*pRes = *(*float64)(unsafe.Pointer(&p))
+		// p := uint64(uintptr(res))
+		// *pRes = *(*float64)(unsafe.Pointer(&p))
+		*pRes = C.voidp2double(res)
 	case C.rt_string:
 		var b []byte     // no allocation
 

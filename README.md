@@ -24,7 +24,11 @@ imported.
 ### Usage
 
 The package is fully go-getable, no need to install any external C libraries. 
-So, just type `go get github.com/rosbit/duktape-bridge` to install.
+So, just type
+
+  `go get github.com/rosbit/duktape-bridge/duk-bridge-go`
+
+to install.
 
 ```go
 package main
@@ -39,8 +43,11 @@ func main() {
   res, _ := ctx.Eval("2 + 3")
   fmt.Println("result is:", res)
 
+  /*
+  // or run a js file
   res, _ := ctx.EvalFile("filename.js")
   fmt.Println("result is:", res)
+  */
 }
 ```
 
