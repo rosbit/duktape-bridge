@@ -131,7 +131,7 @@ func argToJson(arg interface{}, p **C.char, pLen *C.int) bool {
 	}
 }
 
-func parseArgs(args ...interface{}) (nargs int, fmt[]byte, argv []uint64) {
+func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 	nargs = len(args)
 	fmt = make([]byte, nargs+1)    // char *fmt in C
 	fmt[nargs] = byte(0)           // the ending '\0' for cz-string.

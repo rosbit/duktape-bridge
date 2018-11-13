@@ -170,7 +170,7 @@ func (ctx *JSEnv) CallFunc(funcName string, args ...interface{}) interface{} {
 		C.js_call_registered_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
 	} else {
 		// translate the arguments for C.
-		_, fmt, argv := parseArgs(args...)
+		_, fmt, argv := parseArgs(args)
 
 		var f *C.char
 		getBytesPtr(fmt, &f)  // f -> fmt
@@ -198,7 +198,7 @@ func (ctx *JSEnv) CallFileFunc(scriptFile string, args ...interface{}) interface
 		C.js_call_file_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
 	} else {
 		// translate the arguments for C.
-		_, fmt, argv := parseArgs(args...)
+		_, fmt, argv := parseArgs(args)
 
 		var f *C.char
 		getBytesPtr(fmt, &f)  // f -> fmt
