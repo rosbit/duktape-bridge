@@ -1,7 +1,7 @@
 package main
 
 import (
-	js "duk-bridge-go"
+	js "github.com/rosbit/duktape-bridge/duk-bridge-go"
 	"os"
 	"fmt"
 	"encoding/json"
