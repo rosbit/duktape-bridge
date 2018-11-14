@@ -8,18 +8,18 @@ implementations of Duktape for languages other than C, most of them inherit the
 methods of using API of Duktape.
 
 This package is intended to implement a wrapper called duk-bridge in C, and on top of
-the C bridge, wrappers in Go and Java implemented. All of the bridge wrappers provide very
-common functions just like Eval(), CallFunc(), RegisterGoFunc(). Without any Duktape
-knowledge, you can embed Duktape to your application.
+the C bridge, wrappers in Go and Java are implemented. All of the bridge wrappers
+provide very common functions just like Eval(), CallFunc(), RegisterGoFunc().
+So even without any Duktape knowledge, one can embed Duktape to an application.
 
-What's more, Go functions registered to be called in JS are common Go function.
-You write the Go logic, the Go bridge will convert arguments of JavaScript code
-according to your Go function, call your Go function, convert the result of your
-Go function to it in JavaScript.
+What's more, Go functions registered to be called in JS are common Go functions.
+Given a logic function written in Go, the Go bridge will convert arguments of
+JavaScript code to those of Go function, call the Go function and convert the result
+from Go function to JavaScript function.
 
-The Go bridge also supports making your Go package to a Duktape JavaScript module. So
-what you can do is just write `var mod = require('your_module')`, your Go package is
-imported.
+The Go bridge can also make your Go package to a Duktape JavaScript module. So
+what you can do is just writing `var mod = require('your_module')`, your Go package is
+ready to be called by JS.
 
 ### Usage
 
@@ -53,7 +53,7 @@ func main() {
 
 ### Go calls JavaScript function
 
-Suppose you have a js file named `a.js` like this:
+Suppose there's a js file named `a.js` like this:
 
 ```js
 function test() {
@@ -66,7 +66,7 @@ function test() {
 }
 ```
 
-you can call the js function test() in your Go code:
+one can call the js function test() in Go code like the following:
 
 ```go
 package main
@@ -92,7 +92,8 @@ func main() {
 
 ### JavaScript calls Go function
 
-JavaScript calling Go function is also easy. In your Go code, register a function:
+JavaScript calling Go function is also easy. In the Go code, register a function with
+a name by calling `RegisterGoFunc("name", function)`. There's the Go example:
 
 ```go
 package main
@@ -114,7 +115,7 @@ func main() {
 }
 ```
 
-the testing `b.js` is as follows:
+In JS code, one can call the registered name directly. There's the example js `b.js`.
 
 ```js
 var r = adder(1, 100)   // the function "adder" is implemented in Go
@@ -124,7 +125,7 @@ console.log(r)
 #### The limitation of Go function
 
 If a Go function registered to be called by JS, the types of its arguments and result
-must meet such satisfications:
+must meet some satisfications:
 
  - primitive type bool, int, float64 are acceptable
  - string and []byte are acceptable
@@ -192,24 +193,24 @@ copy it to the `modules` subdirectory. now run the main Go app.
 
 #### Limitation of Go module
 
-Not all Go packages could become js module. There are some limitations:
+Not all Go packages can become js module. There are some limitations:
 
  - function NewGoModule with prototype `func NewGoModule() interface{}` must be in the module,
    and it returns a pointer to struct.
  - Though as if function NewGoModule() will be called multi-times, in fact Duktape engine will
    cache the required module and it is called **only once** even if you `require` it multi-times.
-   So don't declare module specific variables in struct. Only read only constants are acceptable.
- - function name with the first capital letter will be exported as moudle method. For example,
+   So don't declare module related variables in struct. Only read only constants are acceptable.
+ - function name with the first letter in capital will be exported as moudle method. For example,
    `Adder` will be exported but `adder` will not. But to refer the `Adder` method, please use
    `adder` as used in `c.js`
 
 ### Duktape bridge for C and Java
 
  - Duktape bridge for C is under the main directory of the project, just run `make`,
-   a file `duk_bridge.so` will be created, with the `duk_bridge.h`, you can embed Duktape
-   in any C/C++ project.
+   a file `duk_bridge.so` will be created, with `duk_bridge.h` and `duk_bridge.so`,
+   one can embed Duktape in any C/C++ project.
  - Duktape bridge for Java is under the subdiretory `duk-bridge-java`, run `make` to
-   create `dukbridge.jar` and `libdukjs.so`. Then you can run
+   create `dukbridge.jar` and `libdukjs.so`. Then one can run
  
    `java -jar dukbridge.jar -Djava.library.path=. <file.js> <func_name>`
  
@@ -220,7 +221,7 @@ Not all Go packages could become js module. There are some limitations:
 ### Lua vs. Dutakpe
 
  - Duktape borrows a lot from Lua conceptually. The usage of Duktape API
-   is same as that of Lua.
+   is very similar to that of Lua.
  - The difference of Lua and Duktape is the embedding language: Duketape engine supports
    JavaScript, which is now very popular.
 
