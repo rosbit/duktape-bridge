@@ -6,7 +6,7 @@ package duk_bridge
  */
 
 /*
-#cgo CFLAGS: -I..
+#cgo CFLAGS: -I.. -I../duktape
 #cgo LDFLAGS: -ldl -lm
 #include "duk_bridge.h"
 #include <string.h>

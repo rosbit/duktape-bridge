@@ -1,1 +1,1 @@
-../duktape.c
+../duktape/duktape.c

@@ -1,1 +1,1 @@
-../duk_module_duktape.c
+../duktape/duk_module_duktape.c

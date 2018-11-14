@@ -5,22 +5,20 @@ DUKTAPE_OBJS = duktape.o \
                duk_console.o \
                duk_module_duktape.o
 
+OBJS = $(addprefix duktape/, $(DUKTAPE_OBJS))
+
 .SUFFIXES:
 .SUFFIXES: .o .c .h
 
 all: duk_bridge.so
 
-duk_bridge.so: duk_bridge.o $(DUKTAPE_OBJS)
-	$(CC) -shared -o $@ duk_bridge.o $(DUKTAPE_OBJS) -ldl
+duk_bridge.so: duk_bridge.o $(OBJS)
+	$(CC) -shared -o $@ duk_bridge.o $(OBJS) -ldl
 
-duktape.o: duktape.c duktape.h
-duk_print_alert.o: duk_print_alert.c duk_print_alert.h
-duk_console.o: duk_console.c duk_console.h
-duk_module_duktape.o: duk_module_duktape.c duk_module_duktape.h
 duk_bridge.o: duk_bridge.c duk_bridge.h
 
 .c.o:
-	$(CC) -fPIC -c $<
+	$(CC) -fPIC -o $@ -c $< -Iduktape
 
 clean:
-	rm -f $(DUKTAPE_OBJS) duk_bridge.o duk_bridge.so
+	rm -f $(OBJS) duk_bridge.o duk_bridge.so

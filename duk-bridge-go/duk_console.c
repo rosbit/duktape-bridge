@@ -1,1 +1,1 @@
-../duk_console.c
+../duktape/duk_console.c

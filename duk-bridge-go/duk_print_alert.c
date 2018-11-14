@@ -1,1 +1,1 @@
-../duk_print_alert.c
+../duktape/duk_print_alert.c
