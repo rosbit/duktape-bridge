@@ -132,7 +132,7 @@ must meet some satisfications:
  - primitive type bool, int, float64 are acceptable
  - string and []byte are acceptable
  - array slice of bool, int, float64, string are acceptable. e.g. []bool, []int
- - map with string as the type of key is acceptable. e.go. map[string]interface{}
+ - map with string as the type of key is acceptable. e.g. map[string]interface{}
 
 ### Go module and module loader
 
