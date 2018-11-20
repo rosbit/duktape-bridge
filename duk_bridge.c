@@ -48,7 +48,7 @@ static int defReadFileContent(const char *f, char **c, size_t *l) {
 	}
 	char *src = malloc(size);
 	if (src == NULL) {
-		fprintf(stderr, "failed to calloc memory of %ld bytes for %s\n", size, f);
+		fprintf(stderr, "failed to calloc memory of %ld bytes for %s\n", (long)size, f);
 		return -3;
 	}
 	FILE *fp = fopen(f, "rb");
@@ -132,7 +132,7 @@ static duk_ret_t unload_native_obj(duk_context *ctx) {
 	fn_module_finalizer finalizer = (fn_module_finalizer)duk_get_pointer(ctx, -3);
 	void *udd = duk_get_pointer(ctx, -2);
 	void *hMod = duk_get_pointer(ctx, -1);
-	duk_pop_n(ctx, 4);
+	duk_pop_n(ctx, 5);
 
 	finalizer(udd, mod_name, hMod);
 	return 0;
@@ -161,7 +161,7 @@ static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, co
 	if (hMod == NULL) {
 		return try_other_init;
 	}
-	duk_push_object(ctx); // a tricky, one can js_add_module_method() in get_methods_list()
+	duk_push_object(ctx); // a tricky, one can call js_add_module_method() in get_methods_list()
 
 	if (finalizer != NULL) {
 		duk_push_c_function(ctx, unload_native_obj, 0);     // [ ..., obj, unload_native_obj ]
