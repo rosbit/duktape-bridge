@@ -82,7 +82,7 @@ func main() {
   fmt.Println("result is:", res)
 
   /*
-  // or if you want to the function more than 1 times, just register it first
+  // or if you want to call the js function more than 1 times, just register it first
   ctx.RegisterFileFunc("a.js", "test")
   ctx.CallFunc("test", "args 1", 2, true, "other args")
   ctx.CallFunc("test", "array args", []int{1, 2, 3})
