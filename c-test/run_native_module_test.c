@@ -87,6 +87,11 @@ static module_method_t methods[] = {
 	{"toJson", toJson, -1, NULL},
 	{NULL}
 };
+static module_attr_t attrs[] = {
+	{"name", af_zstring, (void*)"rosbit", 0},
+	{"age", af_int, (void*)(long)20, 0},
+	{NULL}
+};
 
 static void* load_module(void *udd, const char *mod_home, const char *mod_name) {
 	printf("load_module %s called\n", mod_name);
@@ -97,6 +102,12 @@ static module_method_t* get_methods(void *udd, const char *mod_name, void *mod_h
 {
 	printf("get_methods %s called\n", mod_name);
 	return methods;
+}
+
+static module_attr_t* get_attrs(void *udd, const char *mod_name, void *mod_handle)
+{
+	printf("get_attrs %s called\n", mod_name);
+	return attrs;
 }
 
 static void finalizer(void *udd, const char *mod_name, void *mod_handle)
@@ -110,7 +121,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	void *env = js_create_env(NULL);
-	js_add_module_loader(env, NULL, ".test", load_module, get_methods, finalizer);
+	js_add_module_loader(env, NULL, ".test", load_module, get_methods, get_attrs, finalizer);
 
 	int i;
 	for (i=1; i<argc; i++ ) {

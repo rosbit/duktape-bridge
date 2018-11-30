@@ -13,10 +13,14 @@ package duk_bridge
 extern void go_modBridge(void*, char*, void**, void**, int*, size_t*, fn_free_res*);
 
 extern void* go_loadModule(void*,char*,char*);
-extern module_method_t* go_getMethodsList(void*,char*, void*);
-extern void go_finalizeModule(void*,char*, void*);
-static int mod_entry_size() {
+extern module_method_t* go_getMethodsList(void*, char*, void*);
+extern module_attr_t* go_getAttrsList(void*, char*, void*);
+extern void go_finalizeModule(void*, char*, void*);
+static int mod_method_size() {
 	return sizeof(module_method_t);
+}
+static int mod_attr_size() {
+	return sizeof(module_attr_t);
 }
 */
 import "C"
@@ -90,7 +94,7 @@ func go_getMethodsList(udd unsafe.Pointer, modName *C.char, modHandle unsafe.Poi
 		return (*C.module_method_t)(nil)
 	}
 
-	c_method := (*C.module_method_t)(C.malloc(C.size_t(int(C.mod_entry_size()))))
+	c_method := (*C.module_method_t)(C.malloc(C.size_t(int(C.mod_method_size()))))
 	if c_method == nil {
 		fmt.Printf("failed to allocate memory for module_method_t")
 		return (*C.module_method_t)(nil)
@@ -122,6 +126,103 @@ func go_getMethodsList(udd unsafe.Pointer, modName *C.char, modHandle unsafe.Poi
 	return (*C.module_method_t)(nil)
 }
 
+//export go_getAttrsList
+func go_getAttrsList(udd unsafe.Pointer, modName *C.char, modHandle unsafe.Pointer) *C.module_attr_t {
+	modKey := int64(uintptr(modHandle))
+	modInfo := getModInfo(modKey)
+	if modInfo == nil {
+		return (*C.module_attr_t)(nil)
+	}
+
+	c_attr := (*C.module_attr_t)(C.malloc(C.size_t(int(C.mod_attr_size()))))
+	if c_attr == nil {
+		fmt.Printf("failed to allocate memory for module_attr_t")
+		return (*C.module_attr_t)(nil)
+	}
+	defer C.free(unsafe.Pointer(c_attr))
+
+	loaderKey := int64(uintptr(udd))
+	_, env, _ := getModuleLoader(loaderKey)
+	structP := modInfo.structP.Elem()
+	nFields := structP.NumField()
+	structT := structP.Type()
+	for i:=0; i<nFields; i++ {
+		field := structP.Field(i)
+		fieldV := structT.Field(i)
+
+		c_attr.name = C.CString(fieldV.Name)
+		*(c_attr.name) = C.char(C.tolower(C.int(*(c_attr.name))))
+		defer C.free(unsafe.Pointer(c_attr.name))
+
+		var cs *C.char
+		var l C.int
+		switch (field.Kind()) {
+		case reflect.Bool:
+			c_attr.fmt = C.af_bool
+			if field.Bool() {
+				c_attr.val = unsafe.Pointer(uintptr(1))
+			} else {
+				c_attr.val = unsafe.Pointer(uintptr(0))
+			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+			c_attr.fmt = C.af_int
+			c_attr.val = unsafe.Pointer(uintptr(field.Int()))
+		case reflect.Int64:
+			c_attr.fmt = C.af_double
+			c_attr.val = C.double2voidp(C.double(field.Int()))
+		case reflect.Uint8, reflect.Uint16:
+			c_attr.fmt = C.af_int
+			c_attr.val = unsafe.Pointer(uintptr(field.Uint()))
+		case reflect.Uint, reflect.Uint32, reflect.Uint64:
+			c_attr.fmt = C.af_double
+			c_attr.val = C.double2voidp(C.double(field.Uint()))
+		case reflect.Float32, reflect.Float64:
+			c_attr.fmt = C.af_double
+			c_attr.val = C.double2voidp(C.double(field.Float()))
+		case reflect.String:
+			c_attr.fmt = C.af_lstring
+			s := field.String()
+			getStrPtrLen(&s, &cs, &l)
+			c_attr.val = unsafe.Pointer(cs)
+			c_attr.val_len = C.size_t(l)
+		case reflect.Slice:
+			if field.IsNil() {
+				c_attr.fmt = C.af_none
+				break
+			}
+			fallthrough
+		case reflect.Array:
+			c_attr.fmt = C.af_jarray
+			t := field.Type()
+			if t.Elem().Kind() == reflect.Uint8 {
+				c_attr.fmt = C.af_lstring
+				s := field.Bytes()
+				getBytesPtrLen(s, &cs, &l)
+				c_attr.val = unsafe.Pointer(cs)
+				c_attr.val_len = C.size_t(l)
+			} else {
+				argToJson(field.Interface(), &cs, &l)
+				c_attr.val = unsafe.Pointer(cs)
+				c_attr.val_len = C.size_t(l)
+			}
+		case reflect.Map:
+			if field.IsNil() {
+				c_attr.fmt = C.af_none
+			} else {
+				c_attr.fmt = C.af_jobject
+				argToJson(field.Interface(), &cs, &l)
+				c_attr.val = unsafe.Pointer(cs)
+				c_attr.val_len = C.size_t(l)
+			}
+		default:
+			continue
+		}
+
+		C.js_add_module_attr(env, c_attr)
+	}
+	return (*C.module_attr_t)(nil)
+}
+
 //export go_finalizeModule
 func go_finalizeModule(udd unsafe.Pointer, modName *C.char, modHandle unsafe.Pointer) {
 	modKey := int64(uintptr(modHandle))
@@ -146,6 +247,6 @@ func (ctx *JSEnv) addGoModuleLoader(loader GoModuleLoader) {
 	s := C.CString(ext)
 	defer C.free(unsafe.Pointer(s))
 
-	C.js_add_module_loader(ctx.env, unsafe.Pointer(uintptr(ctx.loaderKey)), s, (*[0]byte)(C.go_loadModule), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_finalizeModule))
+	C.js_add_module_loader(ctx.env, unsafe.Pointer(uintptr(ctx.loaderKey)), s, (*[0]byte)(C.go_loadModule), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule))
 }
 

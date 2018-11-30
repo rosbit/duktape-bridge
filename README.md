@@ -129,9 +129,9 @@ console.log(r)
 If a Go function registered to be called by JS, the types of its arguments and result
 must meet some satisfications:
 
- - primitive type bool, int, float64 are acceptable
+ - primitive type bool, int, intXX, uintXX, float32, float64 are acceptable
  - string and []byte are acceptable
- - array slice of bool, int, float64, string are acceptable. e.g. []bool, []int
+ - array slice of bool, int, intXX, uintXX, float32, float64, string are acceptable. e.g. []bool, []int
  - map with string as the type of key is acceptable. e.g. map[string]interface{}
 
 ### Go module and module loader
@@ -143,6 +143,9 @@ a JS module. There's the example `c.js`:
 var m = require('test') // this will load the Go plugin test.so
 var r = m.adder(1, 300)
 console.log(r)
+
+console.log('m.name', m.name)
+console.log('m.age', m.age)
 ```
 
 The Go code calls the js
@@ -175,10 +178,14 @@ The Go plugin module implementation:
 ```go
 package main
 
-type Test struct{}
+type Test struct {
+	Name string
+	Age int
+	Other map[string]interface{}
+}
 
 func NewGoModule() interface{} {
-	return &Test{}
+	return &Test{"rosbit", 20}
 }
 
 func (t *Test) Adder(a1 float64, a2 float64) float64 {
@@ -202,9 +209,9 @@ Not all Go packages can become js module. There are some limitations:
  - Though as if function NewGoModule() will be called multi-times, in fact Duktape engine will
    cache the required module and it is called **only once** even if you `require` it multi-times.
    So don't declare module related variables in struct. Only read only constants are acceptable.
- - function name with the first letter in capital will be exported as moudle method. For example,
-   `Adder` will be exported but `adder` will not. But to refer the `Adder` method, please use
-   `adder` as used in `c.js`
+ - function/field name with the first letter in capital will be exported as moudle method/attribute.
+   For example, `Adder` will be exported but `adder` will not. But to refer the `Adder` method,
+   please use `adder` as used in `c.js`
 
 ### Duktape bridge for C and Java
 

@@ -22,7 +22,8 @@ typedef enum {
 	af_lstring = 'S',
 	af_buffer  = 'B',
 	af_jarray  = 'a',
-	af_jobject = 'o'
+	af_jobject = 'o',
+	af_ecmafunc= 'F'
 } arg_format_t;
 
 /** type value for describe fn_native_func() argument `res` */
@@ -35,6 +36,7 @@ typedef enum {
 	rt_object, // const char* pointer to a JSON string, and res_len set at the same time.
 	rt_buffer, // binary data, same as rt_string, but binary data can contain any character.
 	rt_array,  // same as rt_object, but the JSON string is converted from array.
+	rt_func,   // ecmascript function object.
 	total_rt
 } res_type_t;
 
@@ -48,6 +50,8 @@ typedef enum {
  *                   rt_double: value in res is of C double
  *                   rt_string: value in res is the address of a string, and value in res_len is the bytes count
  *                   rt_object: values in res and res_len are pointer and length of a string in JSON format.
+ *                   rt_func: value in res is an ecmascript function,
+ *                            which must be released by calling js_destroy_ecmascript_func()
  * @param res      the pointer to the result. the result is in JSON format
  * @param res_len  count of bytes in res.
  */
@@ -118,12 +122,13 @@ int js_unregister_func(void *env, const char *func_name);
  * @param fmt           the format of arguments in argv
  *                        'n' -> None, the corresponding value in argv could be ignored
  *                        'b' -> boolean, the corresponding value in argv could be 1 or 0
- *                        'i' -> boolean, the corresponding value in argv is of C int
+ *                        'i' -> integer, the corresponding value in argv is of C int
  *                        'd' -> double, the corresponding value in argv is of C double
  *                        's' -> string, the corresponding value in argv is the address of C z-string
  *                        'S' -> bytes buffer, the next 2 values in argv are length and address of buffer
  *                        'a' -> JS array, the next 2 values in argv are length and address of a string encoded in JSON
  *                        'o' -> JS object, the next 2 values in argv are length and address of a string encoded in JSON
+ *                        'F' -> ecmascript function, the corresponding value in argv is an ecmascript function object
  * @param argv          arguments describe by fmt.
  * @return 0 if successfuly, otherwise <0
  */
@@ -138,12 +143,13 @@ int js_call_registered_func(void *env, const char *func_name, fn_call_func_res c
  * @param fmt           the format of arguments in argv
  *                        'n' -> None, the corresponding value in argv could be ignored
  *                        'b' -> boolean, the corresponding value in argv could be 1 or 0
- *                        'i' -> boolean, the corresponding value in argv is of C int
+ *                        'i' -> integer, the corresponding value in argv is of C int
  *                        'd' -> double, the corresponding value in argv is of C double
  *                        's' -> string, the corresponding value in argv is the address of C z-string
  *                        'S' -> bytes buffer, the next 2 values in argv are length and address of buffer
  *                        'a' -> JS array, the next 2 values in argv are length and address of a string encoded in JSON
  *                        'o' -> JS object, the next 2 values in argv are length and address of a string encoded in JSON
+ *                        'F' -> ecmascript function, the corresponding value in argv is an ecmascript function object
  * @param argv          arguments describe by fmt.
  * @return 0 if successfuly, otherwise <0
  */
@@ -187,6 +193,9 @@ typedef void (*fn_free_res)(void*);
  *                            'B' -> bytes buffer, the next 2 values in args are length and address of buffer
  *                            'a' -> JS array, the next 2 values in args are length and address of a string encoded in JSON
  *                            'o' -> JS object, the next 2 values in args are length and address of a string encoded in JSON
+ *                            'F' -> Ecmascript function object, the correspoinding value in args is void*,
+ *                                   which will be called by using js_call_ecmascript_func()
+ *                                   and released by calling js_destroy_ecmascript_func()
  * @param args              the args described by fmt
  * @param [OUT]res          the address to store result, data in any type must be casted to void*
  * @param [OUT]res_type     the type of returned value
@@ -213,6 +222,33 @@ int js_register_native_func(void *env, const char *func_name, fn_native_func nat
  */
 int js_unregister_native_func(void *env, const char *func_name);
 
+/**
+ * call a ecmascript function with arguments.
+ * @param env           the result when calling js_create_env()
+ * @param ecma_func     the ecmascript function object which was transfered by calling fn_native_func() in js.
+ * @param call_func_res the function to receive the result
+ * @param udd           the UDD which will be sent to call_func_res()
+ * @param fmt           the format of arguments in argv
+ *                        'n' -> None, the corresponding value in argv could be ignored
+ *                        'b' -> boolean, the corresponding value in argv could be 1 or 0
+ *                        'i' -> integer, the corresponding value in argv is of C int
+ *                        'd' -> double, the corresponding value in argv is of C double
+ *                        's' -> string, the corresponding value in argv is the address of C z-string
+ *                        'S' -> bytes buffer, the next 2 values in argv are length and address of buffer
+ *                        'a' -> JS array, the next 2 values in argv are length and address of a string encoded in JSON
+ *                        'o' -> JS object, the next 2 values in argv are length and address of a string encoded in JSON
+ *                        'F' -> ecmascript function, the corresponding value in argv is an ecmascript function object
+ * @param argv          arguments describe by fmt.
+ * @return 0 if successfuly, otherwise <0
+ */
+int js_call_ecmascript_func(void *env, void *ecma_func, fn_call_func_res call_func_res, void *udd, char *fmt, void *argv[]);
+
+/**
+ * release the saved ecmascript function.
+ * @param ecma_func   the ecmascript function object which was transfered by calling fn_native_func() in js.
+ */
+void js_destroy_ecmascript_func(void *env, void *ecma_func);
+
 /* =================== utils to convert between double and void* ================== */
 void* double2voidp(double);
 double voidp2double(void*);
@@ -225,6 +261,14 @@ typedef struct {
 	int nargs;              // the number of arguments of the method, <0 if the method supports variadic arguments
 	void *udd;              // the udd transfered to method arguments
 } module_method_t;
+
+/** module attribute definition */
+typedef struct {
+	const char *name; // attribute name to refered in the format `mod_name`.`name`
+	arg_format_t fmt; // the format of type of the attribute value. please refer to js_call_registered_func()
+	void *val;        // the value of attribute.
+	size_t val_len;   // the length of bytes in val
+} module_attr_t;
 
 /**
  * prototype of loading module. this function is called by a module loader.
@@ -244,6 +288,14 @@ typedef void* (*fn_load_module)(void *udd, const char *mod_home, const char *mod
  */
 typedef module_method_t* (*fn_get_methods_list)(void *udd, const char *mod_name, void* mod_handle);
 /**
+ * prototype of get attribute list of the module. attributes will be attached to the given module.
+ * @param udd         argument when calling js_add_module_loader()
+ * @param mod_name    the name of module to be loaded
+ * @param mod_handle  the result of fn_load_module()
+ * @return  a pointer to a module_attr_t array with the last item set to zero.
+ */
+typedef module_attr_t* (*fn_get_attrs_list)(void *udd, const char *mod_name, void* mod_handle);
+/**
  * finalizer of a module when it reaches the end of its block scope.
  * @param udd         argument when calling js_add_module_loader()
  * @param mod_name    the name of module to be loaded
@@ -254,20 +306,48 @@ typedef void (*fn_module_finalizer)(void *udd, const char *mod_name, void *mod_h
 /**
  * to register a module loader. module loaders will be called when calling `require(mod_name)` in JS.
  * @param env              the result when calling js_create_env()
- * @param udd              argument which will be transfered to load_moudle()/get_method_list()/finalizer()
+ * @param udd              argument which will be transfered to load_moudle()/get_methods_list()/get_attrs_list()/finalizer()
  * @param mod_ext          the module file extension for this module loader
  * @param load_module      the init function to init a module instance
- * @param get_method_list  the function to return the methods list
+ * @param get_methods_list the function to return the methods list
+ * @param get_attrs_list   the function to return the attributes list
  * @param finalizer        the function when the module instance reaches the end of its scope.
  */
-void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_module_finalizer finalizer);
+void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
 
 /**
- * a helper function which will be used to attach ONE method in a list returned by calling get_method_list().
+ * a helper function which will be used to attach ONE method in a list returned by calling get_methods_list().
  * @param env        the result when calling js_create_env()
  * @param method     the method description
  */
 void js_add_module_method(void *env, module_method_t *method);
+
+/**
+ * a helper function which will be used to attach ONE attribute in a list returned by calling get_attrs_list().
+ * @param env      the result when calling js_create_env()
+ * @param attr     the attribute description
+ */
+void js_add_module_attr(void *env, module_attr_t *attr);
+
+/**
+ * create a ecmascript module which can be used as a ecmascript function arguement.
+ * @param env              the result when calling js_create_env()
+ * @param udd              argument which will be transfered to get_methods_list()/get_attrs_list()/finalizer()
+ * @param get_methods_list the function to return the methods list
+ * @param get_attrs_list   the function to return the attributes list
+ * @param finalizer        the function when the module instance reaches the end of its scope.
+ * @return  non-NULL if successful, otherwise NULL.
+ *          The non-NULL result can be used as a ecmascript function.
+ *          Release it by calling js_destroy_module() when it is not used any more.
+ */
+void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
+
+/**
+ * destroy module created by calling js_create_ecmascript_module()
+ * @param env     the result when calling js_create_env()
+ * @param module  the result of js_create_ecmascript_module()
+ */
+void js_destroy_module(void *env, void *module);
 
 #ifdef __cplusplus
 }

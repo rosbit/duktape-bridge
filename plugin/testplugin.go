@@ -4,10 +4,15 @@ import (
 	"fmt"
 )
 
-type TestJsModule struct{}
+type TestJsModule struct
+{
+	Name string
+	Age int
+	Other map[string]interface{}
+}
 
 func NewGoModule() interface{} {
-	return &TestJsModule{}
+	return &TestJsModule{"rosbit", 20, map[string]interface{}{"i":1, "s":"string"}}
 }
 
 func (mod* TestJsModule) Adder(a1, a2 float64) float64 {

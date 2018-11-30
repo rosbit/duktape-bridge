@@ -82,6 +82,48 @@ static void toJson(void* udd, const char* fmt, void *args[], void **res, res_typ
 	*res = r;
 }
 
+// --- js as a callback
+static void func_res(void* udd, res_type_t res_type, void* res, size_t res_len) {
+	switch (res_type) {
+	case rt_none:
+		printf("null\n");
+		break;
+	case rt_bool:
+		printf("%s\n", (long)res ? "true" : "false");
+		break;
+	case rt_double:
+		printf("%f\n", voidp2double(res));
+		break;
+	case rt_string:
+	case rt_buffer:
+	case rt_array:
+	case rt_object:
+	default:
+		printf("%.*s\n", (int)res_len, (char*)res);
+		break;
+	}
+}
+static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res_type_t *res_type, size_t *res_len, fn_free_res *free_res)
+{
+	if (fmt == NULL || *fmt == '\0' || fmt[0] != af_ecmafunc) {
+		*res_type = rt_object;
+		*res = malloc(20);
+		strcpy((char*)res, "empty string");
+		*res_len  = strlen((char*)res);
+		*free_res = free_json;
+		return;
+	}
+	
+	void *ecmafunc = args[0]; // if ecmafunc was saved, it could be called times and times again
+	// call js func
+	void* a = (void*)100;
+	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "i", &a);
+	js_destroy_ecmascript_func(NULL, ecmafunc);
+
+	*res_type = rt_int;
+	*res = (void*)(long)10000;
+}
+
 int main(int argc, char *argv[]) {
 	if (argc < 2) {
 		fprintf(stderr, "Usage: %s <script_file> ...\n", argv[0]);
@@ -90,6 +132,7 @@ int main(int argc, char *argv[]) {
 	void *env = js_create_env(NULL);
 	js_register_native_func(env, "adder", adder, 2, NULL);
 	js_register_native_func(env, "toJson", toJson, -1, NULL);
+	js_register_native_func(env, "jsCallback", jsCallback, 1, env);
 
 	int ret;
 	int i;

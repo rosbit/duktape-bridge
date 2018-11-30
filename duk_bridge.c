@@ -30,6 +30,7 @@
 #define NATIVE_MOD_EXT       "_nme_"
 #define NATIVE_MOD_LOADER    "_nml_"
 #define NATIVE_MOD_METHODS   "_nmm_"
+#define NATIVE_MOD_ATTRS     "_nma_"
 #define NATIVE_MOD_FINALIZER "_nmf_"
 
 static void make_func_bridge(duk_context *ctx, const char *func_name, fn_native_func native_func, duk_idx_t nargs, void *udd);
@@ -150,16 +151,57 @@ void js_add_module_method(void *env, module_method_t *method)
 	make_func_bridge(ctx, method->name, method->method, nargs, method->udd); // [ ..., obj ] with obj[method->name] = native_func_bridge
 }
 
+void js_add_module_attr(void *env, module_attr_t *attr)
+{
+	// [ ..., obj ]
+	duk_context *ctx = (duk_context*)env;
+	switch (attr->fmt) {
+	case af_none:
+		duk_push_null(ctx);
+		break;
+	case af_bool:
+		duk_push_boolean(ctx, (int)(long)attr->val);
+		break;
+	case af_int:
+		duk_push_int(ctx, (int)(long)attr->val);
+		break;
+	case af_double:
+		duk_push_number(ctx, voidp2double(attr->val));
+		break;
+	case af_zstring:
+		duk_push_string(ctx, (char*)attr->val);
+		break;
+	case af_lstring:
+		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
+		break;
+	case af_ecmafunc:
+		duk_xcopy_top(ctx, (duk_context*)attr->val, 1); // now the top ctx is [ func ]
+		break;
+	case af_buffer:
+	case af_jarray:
+	case af_jobject:
+	default:
+		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
+		duk_json_decode(ctx, -1);
+		break;
+	}
+	duk_put_prop_string(ctx, -2, attr->name); // [ ..., obj ] with obj[attr->name] = attr
+}
+
 enum {
 	init_obj_ok = 0,
 	failed_to_init_obj,
 	try_other_init
 };
-static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, const char *id, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_module_finalizer finalizer)
+
+static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, const char *id, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
 {
-	void *hMod = load_module(udd, mod_home, id);
-	if (hMod == NULL) {
-		return try_other_init;
+	void *hMod = NULL;
+	if (load_module != NULL) {
+		hMod = load_module(udd, mod_home, id);
+		if (hMod == NULL) {
+			return try_other_init;
+		}
 	}
 	duk_push_object(ctx); // a tricky, one can call js_add_module_method() in get_methods_list()
 
@@ -181,13 +223,21 @@ static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, co
 		duk_set_finalizer(ctx, -2); // [ ..., obj ] with unload_native_obj as finalizer
 	}
 
-	module_method_t *methods = get_methods_list(udd, id, hMod);
-	if (methods == NULL) {
-		return init_obj_ok;
-	}
 	int i;
-	for (i=0; methods[i].name != NULL; i++) {
-		js_add_module_method(ctx, methods+i);
+	module_method_t *methods = get_methods_list(udd, id, hMod);
+	if (methods != NULL) {
+		for (i=0; methods[i].name != NULL; i++) {
+			js_add_module_method(ctx, methods+i);
+		}
+	}
+
+	if (get_attrs_list != NULL) {
+		module_attr_t *attrs = get_attrs_list(udd, id, hMod);
+		if (attrs != NULL) {
+			for (i=0; attrs[i].name != NULL; i++) {
+				js_add_module_attr(ctx, attrs+i);
+			}
+		}
 	}
 	return init_obj_ok;
 }
@@ -227,22 +277,24 @@ static duk_ret_t loadNativeModule(duk_context *ctx) {
 		duk_get_prop_string(ctx, -1, NATIVE_MOD_EXT);
 		duk_get_prop_string(ctx, -2, NATIVE_MOD_LOADER);
 		duk_get_prop_string(ctx, -3, NATIVE_MOD_METHODS);
-		duk_get_prop_string(ctx, -4, NATIVE_MOD_FINALIZER);
-		duk_get_prop_string(ctx, -5, NATIVE_UDD);
+		duk_get_prop_string(ctx, -4, NATIVE_MOD_ATTRS);
+		duk_get_prop_string(ctx, -5, NATIVE_MOD_FINALIZER);
+		duk_get_prop_string(ctx, -6, NATIVE_UDD);
 
 		void *udd = duk_get_pointer(ctx, -1);
 		fn_module_finalizer finalizer = (fn_module_finalizer)duk_get_pointer(ctx, -2);
-		fn_get_methods_list get_methods = (fn_get_methods_list)duk_get_pointer(ctx, -3);
-		fn_load_module load_module = (fn_load_module)duk_get_pointer(ctx, -4);
-		const char *ext = duk_get_string(ctx, -5);
-		duk_pop_n(ctx, 6);
+		fn_get_attrs_list get_attrs = (fn_get_attrs_list)duk_get_pointer(ctx, -3);
+		fn_get_methods_list get_methods = (fn_get_methods_list)duk_get_pointer(ctx, -4);
+		fn_load_module load_module = (fn_load_module)duk_get_pointer(ctx, -5);
+		const char *ext = duk_get_string(ctx, -6);
+		duk_pop_n(ctx, 7);
 		// [ ... ]
 
 		if (load_module == NULL || get_methods == NULL) {
 			continue;
 		}
 
-		int ret = init_native_obj(ctx, udd, mod_home, id, ext, load_module, get_methods, finalizer);
+		int ret = init_native_obj(ctx, udd, mod_home, id, ext, load_module, get_methods, get_attrs, finalizer);
 		switch (ret) {
 		case init_obj_ok:
 			return 1;
@@ -489,6 +541,14 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 		res = (void*)duk_get_buffer(ctx, -1, &len);
 		break;
 	case DUK_TYPE_OBJECT:
+		if (duk_is_ecmascript_function(ctx, -1)) {
+			res_type = rt_func;
+			// copy the function to a new context
+			duk_context* ecmaEnv = duk_create_heap_default();
+			duk_xcopy_top(ecmaEnv, ctx, 1); // now ecmaEnv contains only [ func ]
+			res = (void*)ecmaEnv; // save the context, which must be freed by calling js_destropy_ecmascript_func
+			break;
+		}
 	default:
 		res_type = duk_is_array(ctx, -1) ? rt_array : rt_object;
 		duk_json_encode(ctx, -1);
@@ -524,6 +584,7 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 	size_t l;
 	int d;
 	int i = 0;
+	duk_context *ecmaEnv; 
 	while (*fmt) {
 		argc++;
 		switch (*fmt++) {
@@ -550,6 +611,10 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			l = (size_t)argv[i++];
 			s = (char*)argv[i++];
 			duk_push_lstring(ctx, s, l);
+			break;
+		case af_ecmafunc:
+			ecmaEnv = (duk_context*)argv[i++];
+			duk_xcopy_top(ctx, ecmaEnv, 1); // now the top ctx is [ func ]
 			break;
 		case af_jarray:
 		case af_jobject:
@@ -696,6 +761,17 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 				j += 2;
 				break;
 			case DUK_TYPE_OBJECT:
+				if (duk_is_ecmascript_function(ctx, i)) {
+					fmt[i] = af_ecmafunc;
+					// copy the function to the top
+					duk_push_null(ctx);   // [ ... null ]
+					duk_copy(ctx, i, -1); // [ ... func ]
+					duk_context* ecmaEnv = duk_create_heap_default();
+					duk_xcopy_top(ecmaEnv, ctx, 1); // now ecmaEnv contains only [ func ]
+					duk_pop(ctx); // pop up the copied func
+					args[j++] = (void*)ecmaEnv; // save the context, which must be freed by calling js_destropy_ecmascript_func
+					break;
+				}
 			default:
 				fmt[i] = duk_is_array(ctx, i) ? af_jarray : af_jobject;
 				duk_json_encode(ctx, i);
@@ -728,6 +804,9 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 		if (free_res != NULL) {
 			free_res(cb_res);
 		}
+		return 1;
+	case rt_func:
+		duk_xcopy_top(ctx, (duk_context*)cb_res, 1); // now the top of ctx is [ func ]
 		return 1;
 	case rt_object:
 	default:
@@ -789,6 +868,20 @@ int js_unregister_native_func(void *env, const char *func_name)
 	return 0;
 }
 
+int js_call_ecmascript_func(void *env, void *ecma_func, fn_call_func_res call_func_res, void *udd, char *fmt, void *argv[])
+{
+	duk_context *ctx = (duk_context*)env;
+	duk_context *ecmaEnv = (duk_context*)ecma_func;
+	duk_xcopy_top(ctx, ecmaEnv, 1); // now ctx contains [ func ]
+	return push_args_and_call_func(ctx, "_ecmafunc_", call_func_res, udd, fmt, argv);
+}
+
+void js_destroy_ecmascript_func(void *env, void *ecma_func) {
+	duk_context* ctx = (duk_context*)ecma_func;
+	duk_pop(ctx);
+	duk_destroy_heap(ctx);
+}
+
 void* double2voidp(double d) {
 	return (void*)*((long*)&d);
 }
@@ -798,7 +891,7 @@ double voidp2double(void* v) {
 	return *((double*)(&l));
 }
 
-void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_module_finalizer finalizer)
+void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_module load_module, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
 {
 	duk_context *ctx = (duk_context*)env;
 	int loader_count = 0;
@@ -821,6 +914,9 @@ void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_mod
 	duk_push_pointer(ctx, get_methods_list);
 	duk_put_prop_string(ctx, -2, NATIVE_MOD_METHODS);
 
+	duk_push_pointer(ctx, get_attrs_list);
+	duk_put_prop_string(ctx, -2, NATIVE_MOD_ATTRS);
+
 	duk_push_pointer(ctx, finalizer);
 	duk_put_prop_string(ctx, -2, NATIVE_MOD_FINALIZER);
 
@@ -832,4 +928,30 @@ void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_mod
 	free(modNum);
 
 	duk_pop(ctx);
+}
+
+void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
+{
+	// create a new context to init the new created module.
+	duk_context *ctx = duk_create_heap_default();
+	if (ctx == NULL) {
+		return NULL;
+	}
+
+	int ret = init_native_obj(ctx, udd, NULL, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
+	switch (ret) {
+	case init_obj_ok:
+		return ctx;
+	case failed_to_init_obj:
+	default:
+		duk_destroy_heap(ctx);
+		return NULL;
+	}
+}
+
+void js_destroy_module(void *env, void *module)
+{
+	duk_context* ctx = (duk_context*)module;
+	duk_pop(ctx);
+	duk_destroy_heap(ctx);
 }

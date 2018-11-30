@@ -104,9 +104,7 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
 		*pRes = b
-	case C.rt_object:
-		fallthrough
-	case C.rt_array:
+	case C.rt_object, C.rt_array:
 		fallthrough
 	default:
 		var b []byte     // no allocation
@@ -131,6 +129,14 @@ func argToJson(arg interface{}, p **C.char, pLen *C.int) bool {
 	}
 }
 
+func double2uint64(f float64) uint64 {
+	return *(*uint64)(unsafe.Pointer(&f))
+}
+
+func uint64_2double(p uint64) float64 {
+	return *(*float64)(unsafe.Pointer(&p))
+}
+
 func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 	nargs = len(args)
 	fmt = make([]byte, nargs+1)    // char *fmt in C
@@ -147,6 +153,7 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 			j += 1
 			continue
 		}
+		v := reflect.ValueOf(arg)
 
 		switch arg.(type) {
 		case bool:
@@ -157,15 +164,28 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 				argv[j] = uint64(0)
 			}
 			j += 1
-		case int:
+		case int, int8, int16, int32:
 			fmt[i] = C.af_int
-			argv[j] = uint64(arg.(int))
+			argv[j] = uint64(v.Int())
 			j += 1
-		case float64:
+		case int64:
 			fmt[i] = C.af_double
-			f := arg.(float64)
-			p := (*uint64)(unsafe.Pointer(&f))
-			argv[j] = *p
+			f := float64(arg.(int64))
+			argv[j] = double2uint64(f)
+			j += 1
+		case uint8, uint16:
+			fmt[i] = C.af_int
+			argv[j] = v.Uint()
+			j += 1
+		case uint, uint32, uint64:
+			fmt[i] = C.af_double
+			f := float64(v.Uint())
+			argv[j] = double2uint64(f)
+			j += 1
+		case float32, float64:
+			fmt[i] = C.af_double
+			f := v.Float()
+			argv[j] = double2uint64(f)
 			j += 1
 		case string:
 			fmt[i] = C.af_lstring
@@ -310,7 +330,35 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 					j += 1
 				case C.af_double:
 					p := uint64(uintptr(arrArgs[j]))
-					argv[i] = reflect.ValueOf(*(*float64)(unsafe.Pointer(&p)))
+					d := uint64_2double(p)
+					var v interface{}
+					switch funArgType.Kind() {
+					case reflect.Int8:
+						v = int8(d)
+					case reflect.Uint8:
+						v = uint8(d)
+					case reflect.Int16:
+						v = int16(d)
+					case reflect.Uint16:
+						v = uint16(d)
+					case reflect.Int32:
+						v = int32(d)
+					case reflect.Uint32:
+						v = uint32(d)
+					case reflect.Int:
+						v = int(d)
+					case reflect.Uint:
+						v = uint(d)
+					case reflect.Int64:
+						v = int64(d)
+					case reflect.Uint64:
+						v = uint64(d)
+					case reflect.Float32:
+						v = float32(d)
+					default:
+						v = d
+					}
+					argv[i] = reflect.ValueOf(v)
 					j += 1
 				case C.af_lstring:
 					l := int(uintptr(arrArgs[j]))
@@ -362,7 +410,8 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		return
 	}
 
-	res := r[0].Interface()
+	resV := r[0]
+	res := resV.Interface()
 	switch res.(type) {
 	case bool:
 		*res_type = C.rt_bool
@@ -371,14 +420,21 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		} else {
 			*out_res = unsafe.Pointer(uintptr(0))
 		}
-	case int:
+	case int, int8, int16, int32:
 		*res_type = C.rt_int
-		*out_res = unsafe.Pointer(uintptr(res.(int)))
-	case float64:
+		*out_res = unsafe.Pointer(uintptr(resV.Int()))
+	case int64:
 		*res_type = C.rt_double
-		f := res.(float64)
-		p := (*uint64)(unsafe.Pointer(&f))
-		*out_res = unsafe.Pointer(uintptr(*p))
+		*out_res = C.double2voidp(C.double(resV.Int()))
+	case uint8, uint16:
+		*res_type = C.rt_int
+		*out_res = unsafe.Pointer(uintptr(resV.Uint()))
+	case uint, uint32, uint64:
+		*res_type = C.rt_double
+		*out_res = C.double2voidp(C.double(resV.Uint()))
+	case float32, float64:
+		*res_type = C.rt_double
+		*out_res = C.double2voidp(C.double(resV.Float()))
 	case string:
 		setBuffer(res, out_res, res_type, res_len)
 	case []byte:
