@@ -104,6 +104,8 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
 		*pRes = b
+	case C.rt_func:
+		*pRes = res
 	case C.rt_object, C.rt_array:
 		fallthrough
 	default:
@@ -222,6 +224,11 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 				argv[j] = uint64(0)
 				j += 1
 			}
+		case *EcmaObject:
+			fmt[i] = C.af_ecmafunc
+			eo := arg.(*EcmaObject)
+			argv[j] = uint64(uintptr(eo.ecmaObj))
+			j += 1
 		default:
 			if argToJson(arg, &p, &pLen) {
 				fmt[i] = C.af_jobject
@@ -392,6 +399,9 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 					} else {
 						argv[i] = reflect.Zero(funArgType)
 					}
+				case C.af_ecmafunc:
+					argv[i] = reflect.ValueOf(wrapEcmaObject(arrArgs[j], true))
+					j += 1
 				}
 
 				if !argv[i].Type().ConvertibleTo(funArgType) {
@@ -443,6 +453,10 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		resToJson(res, out_res, res_type, res_len)
 	case []interface{}:
 		resToJson(res, out_res, res_type, res_len)
+	case *EcmaObject:
+		*res_type = C.rt_func
+		eo := res.(*EcmaObject)
+		*out_res = eo.ecmaObj
 	default:
 		*res_type = C.rt_none
 		*out_res = unsafe.Pointer(uintptr(0))

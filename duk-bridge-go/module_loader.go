@@ -241,12 +241,51 @@ func (ctx *JSEnv) addGoModuleLoader(loader GoModuleLoader) {
 	if loader == nil {
 		return
 	}
-	ctx.loaderKey = saveModuleLoader(loader, ctx.env)
+	loaderKey := saveModuleLoader(loader, ctx.env)
+	ctx.loaderKey = append(ctx.loaderKey, loaderKey)
 
 	ext := loader.GetExtName()
 	s := C.CString(ext)
 	defer C.free(unsafe.Pointer(s))
 
-	C.js_add_module_loader(ctx.env, unsafe.Pointer(uintptr(ctx.loaderKey)), s, (*[0]byte)(C.go_loadModule), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule))
+	C.js_add_module_loader(ctx.env, unsafe.Pointer(uintptr(loaderKey)), s, (*[0]byte)(C.go_loadModule), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule))
+}
+
+func (ctx *JSEnv) struct2EcmaModule(structPtr interface{}) (*EcmaObject, error) {
+	if structPtr == nil {
+		return nil, fmt.Errorf("nil struct given")
+	}
+
+	structP := reflect.ValueOf(structPtr)
+	if structP.Kind() != reflect.Struct {
+		if structP.Kind() != reflect.Ptr {
+			return nil, fmt.Errorf("pointer expected")
+		}
+		if structP.Elem().Kind() != reflect.Struct {
+			return nil,  fmt.Errorf("struct pointer expected")
+		}
+		// structP = structP.Elem() // strucP is not pointer in such case
+	}
+
+	modKey, methodKeys := createMethodKeys(structPtr, structP)
+	if methodKeys == nil {
+		return nil, fmt.Errorf("no methods found when initing module")
+	}
+
+	loaderKey := ctx.loaderKey[1] // the second loader
+	m := C.js_create_ecmascript_module(ctx.env, unsafe.Pointer(uintptr(loaderKey)), unsafe.Pointer(uintptr(modKey)), (*[0]byte)(nil), (*[0]byte)(nil), (*[0]byte)(C.go_finalizeModule)) // only set finalizer
+
+	if m == unsafe.Pointer(nil) {
+		return nil, fmt.Errorf("failed to create ecmascript module")
+	}
+
+	loaderKey = ctx.ecmaModuleLoader.saveModule(m) // the real loaderKey
+
+	// set module methods and attributes
+	C.go_getMethodsList(unsafe.Pointer(uintptr(loaderKey)), (*C.char)(nil), unsafe.Pointer(uintptr(modKey)))
+	C.go_getAttrsList(unsafe.Pointer(uintptr(loaderKey)), (*C.char)(nil), unsafe.Pointer(uintptr(modKey)))
+
+	removeModuleLoader(loaderKey); // the real loaderKey is no use any more, release it.
+	return wrapEcmaObject(m, false), nil
 }
 

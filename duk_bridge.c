@@ -202,6 +202,8 @@ static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, co
 		if (hMod == NULL) {
 			return try_other_init;
 		}
+	} else {
+		hMod = (void*)mod_home;
 	}
 	duk_push_object(ctx); // a tricky, one can call js_add_module_method() in get_methods_list()
 
@@ -224,10 +226,12 @@ static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, co
 	}
 
 	int i;
-	module_method_t *methods = get_methods_list(udd, id, hMod);
-	if (methods != NULL) {
-		for (i=0; methods[i].name != NULL; i++) {
-			js_add_module_method(ctx, methods+i);
+	if (get_methods_list != NULL) {
+		module_method_t *methods = get_methods_list(udd, id, hMod);
+		if (methods != NULL) {
+			for (i=0; methods[i].name != NULL; i++) {
+				js_add_module_method(ctx, methods+i);
+			}
 		}
 	}
 
@@ -930,7 +934,7 @@ void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_mod
 	duk_pop(ctx);
 }
 
-void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
+void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
 {
 	// create a new context to init the new created module.
 	duk_context *ctx = duk_create_heap_default();
@@ -938,7 +942,7 @@ void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_
 		return NULL;
 	}
 
-	int ret = init_native_obj(ctx, udd, NULL, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
+	int ret = init_native_obj(ctx, udd, (const char*)mod_handle, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
 	switch (ret) {
 	case init_obj_ok:
 		return ctx;
@@ -949,7 +953,7 @@ void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_
 	}
 }
 
-void js_destroy_module(void *env, void *module)
+void js_destroy_ecmascript_module(void *env, void *module)
 {
 	duk_context* ctx = (duk_context*)module;
 	duk_pop(ctx);

@@ -103,6 +103,35 @@ static void func_res(void* udd, res_type_t res_type, void* res, size_t res_len) 
 		break;
 	}
 }
+
+static module_method_t methods[] = {
+	{"adder", adder, 2, NULL},
+	{"toJson", toJson, -1, NULL},
+	{NULL}
+};
+static module_attr_t attrs[] = {
+	{"name", af_zstring, (void*)"rosbit", 0},
+	{"age", af_int, (void*)(long)20, 0},
+	{NULL}
+};
+
+static module_method_t* get_methods(void *udd, const char *mod_name, void *mod_handle)
+{
+	printf("get_methods %s called\n", mod_name);
+	return methods;
+}
+
+static module_attr_t* get_attrs(void *udd, const char *mod_name, void *mod_handle)
+{
+	printf("get_attrs %s called\n", mod_name);
+	return attrs;
+}
+
+static void finalizer(void *udd, const char *mod_name, void *mod_handle)
+{
+	printf("finalizer %s called\n", mod_name);
+}
+
 static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res_type_t *res_type, size_t *res_len, fn_free_res *free_res)
 {
 	if (fmt == NULL || *fmt == '\0' || fmt[0] != af_ecmafunc) {
@@ -116,9 +145,13 @@ static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res
 	
 	void *ecmafunc = args[0]; // if ecmafunc was saved, it could be called times and times again
 	// call js func
-	void* a = (void*)100;
-	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "i", &a);
+	void *m = js_create_ecmascript_module(NULL, NULL, NULL, get_methods, get_attrs, finalizer);
+
+	//void* a = (void*)100;
+	//js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "i", &a);
+	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "F", &m);
 	js_destroy_ecmascript_func(NULL, ecmafunc);
+	js_destroy_ecmascript_module(NULL, m);
 
 	*res_type = rt_int;
 	*res = (void*)(long)10000;

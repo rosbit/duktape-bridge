@@ -7,6 +7,10 @@ import (
 	"encoding/json"
 )
 
+var (
+	jsEnv *js.JSEnv
+)
+
 func adder(a1, a2 float64) float64 {
 	return a1 + a2
 }
@@ -27,6 +31,20 @@ func toJson(args ...interface{}) interface{} {
 		}
 		m[fmt.Sprintf("v%d", i)] = args[i]
 	}
+	return m
+}
+
+var (
+	m *js.EcmaObject
+)
+
+// go function with a js function type as a argument
+func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
+	defer jsFunc.Destroy()
+
+	res := jsEnv.CallEcmascriptFunc(jsFunc, "string from duk-bridge-go")
+	handleCallFuncResult(res)
+
 	return m
 }
 
@@ -93,8 +111,8 @@ func main() {
 		fmt.Printf("Unknown option %s\n", os.Args[1])
 		return
 	}
-	jsEnv := js.NewEnv(&testModuleLoader{})
-	// jsEnv := js.NewEnv(nil)
+	jsEnv = js.NewEnv(&testModuleLoader{})
+	// jsEnv = js.NewEnv(nil)
 
 	argc := len(os.Args)
 	switch os.Args[1] {
@@ -138,6 +156,9 @@ func main() {
 			break
 		}
 		jsEnv.RegisterGoFunc("adder", adder)
+		jsEnv.RegisterGoFunc("jsCallback", jsCallback)
+		m, _ = jsEnv.CreateEcmascriptModule(&testDukModule{})
+
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gofunc() ----------\n")
 			if res, err := jsEnv.EvalFile(os.Args[i]); err != nil {
@@ -148,14 +169,8 @@ func main() {
 		}
 		jsEnv.UnregisterGoFunc("toJson")
 		jsEnv.UnregisterGoFunc("adder")
+		jsEnv.UnregisterGoFunc("jsCallback")
 	case "-gomodule":
-		/*
-		m := &testDukModule{}
-		err := jsEnv.RegisterGoModule("go_m", m)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			break
-		}*/
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gomodule() ----------\n")
 			if res, err := jsEnv.EvalFile(os.Args[i]); err != nil {
@@ -164,7 +179,6 @@ func main() {
 				handleCallFuncResult(res)
 			}
 		}
-		// jsEnv.UnregisterGoModule("go_m")
 	}
 	jsEnv.Destroy()
 }

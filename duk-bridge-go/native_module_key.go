@@ -25,7 +25,6 @@ type moduleLoaderEnv struct {
 	env    unsafe.Pointer
 }
 
-
 var (
 	methodKeyGenerator *V2KPool
 )

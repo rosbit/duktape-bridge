@@ -27,7 +27,8 @@ import (
  */
 type JSEnv struct {
 	env unsafe.Pointer
-	loaderKey int64
+	loaderKey []int64
+	ecmaModuleLoader *EcmaModuleLoader
 }
 
 /**
@@ -36,8 +37,9 @@ type JSEnv struct {
  * @return a new JSEnv if ok, otherwise nil
  */
 func NewEnv(loader GoModuleLoader) *JSEnv {
-	jsEnv := &JSEnv{C.js_create_env(nil), 0}
+	jsEnv := &JSEnv{C.js_create_env(nil), make([]int64, 0, 3), &EcmaModuleLoader{}}
 	jsEnv.addGoModuleLoader(&GoPluginModuleLoader{})
+	jsEnv.addGoModuleLoader(jsEnv.ecmaModuleLoader)
 	if loader != nil {
 		jsEnv.addGoModuleLoader(loader)
 	}
@@ -49,8 +51,12 @@ func NewEnv(loader GoModuleLoader) *JSEnv {
  */
 func (ctx *JSEnv) Destroy() {
 	C.js_destroy_env(ctx.env)
-	if ctx.loaderKey != 0 {
-		removeModuleLoader(ctx.loaderKey)
+	if ctx.loaderKey != nil {
+		for i:=0; i<len(ctx.loaderKey); i++ {
+			if ctx.loaderKey[i] != 0 {
+				removeModuleLoader(ctx.loaderKey[i])
+			}
+		}
 	}
 }
 
@@ -253,3 +259,33 @@ func (ctx *JSEnv) UnregisterGoFunc(funcName string) error {
 	return fromErrorCode(res)
 }
 
+func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) interface{} {
+	var res interface{} = nil // pointer to result
+	if args == nil {
+		// no args, call the js function directly which will trigger go_resultReceived()
+		C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
+	} else {
+		// translate the arguments for C.
+		_, fmt, argv := parseArgs(args)
+
+		var f *C.char
+		getBytesPtr(fmt, &f)  // f -> fmt
+		var a *unsafe.Pointer
+		getArgsPtr(argv, &a)  // a -> argv
+		C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
+	}
+
+	return res
+}
+
+func (ctx *JSEnv) DestoryEcmascriptFunc(ecmaFunc *EcmaObject) {
+	ecmaFunc.Destroy()
+}
+
+func (ctx *JSEnv) CreateEcmascriptModule(structPtr interface{}) (*EcmaObject, error) {
+	return ctx.struct2EcmaModule(structPtr)
+}
+
+func (ctx *JSEnv) DesctoryEcmascriptModule(module *EcmaObject) {
+	module.Destroy()
+}

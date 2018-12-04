@@ -283,7 +283,7 @@ typedef void* (*fn_load_module)(void *udd, const char *mod_home, const char *mod
  * If memory controlling restriction, this function can call js_add_module_method() directly and return NULL.
  * @param udd         argument when calling js_add_module_loader()
  * @param mod_name    the name of module to be loaded
- * @param mod_handle  the result of fn_load_module()
+ * @param mod_handle  the result of fn_load_module(), or argument of js_create_ecmascript_module()
  * @return  a pointer to a module_method_t array with the last item set to zero.
  */
 typedef module_method_t* (*fn_get_methods_list)(void *udd, const char *mod_name, void* mod_handle);
@@ -291,7 +291,7 @@ typedef module_method_t* (*fn_get_methods_list)(void *udd, const char *mod_name,
  * prototype of get attribute list of the module. attributes will be attached to the given module.
  * @param udd         argument when calling js_add_module_loader()
  * @param mod_name    the name of module to be loaded
- * @param mod_handle  the result of fn_load_module()
+ * @param mod_handle  the result of fn_load_module(), or argument of js_create_ecmascript_module()
  * @return  a pointer to a module_attr_t array with the last item set to zero.
  */
 typedef module_attr_t* (*fn_get_attrs_list)(void *udd, const char *mod_name, void* mod_handle);
@@ -299,7 +299,7 @@ typedef module_attr_t* (*fn_get_attrs_list)(void *udd, const char *mod_name, voi
  * finalizer of a module when it reaches the end of its block scope.
  * @param udd         argument when calling js_add_module_loader()
  * @param mod_name    the name of module to be loaded
- * @param mod_handle  the result of fn_load_module()
+ * @param mod_handle  the result of fn_load_module(), or argument of js_create_ecmascript_module()
  */
 typedef void (*fn_module_finalizer)(void *udd, const char *mod_name, void *mod_handle);
 
@@ -333,21 +333,22 @@ void js_add_module_attr(void *env, module_attr_t *attr);
  * create a ecmascript module which can be used as a ecmascript function arguement.
  * @param env              the result when calling js_create_env()
  * @param udd              argument which will be transfered to get_methods_list()/get_attrs_list()/finalizer()
+ * @param mod_handle       as an argument of get_methods_list()/get_attr_list()/finalizer()
  * @param get_methods_list the function to return the methods list
  * @param get_attrs_list   the function to return the attributes list
  * @param finalizer        the function when the module instance reaches the end of its scope.
  * @return  non-NULL if successful, otherwise NULL.
  *          The non-NULL result can be used as a ecmascript function.
- *          Release it by calling js_destroy_module() when it is not used any more.
+ *          Release it by calling js_destroy_ecmascript_module() when it is not used any more.
  */
-void* js_create_ecmascript_module(void *env, void *udd, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
+void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
 
 /**
  * destroy module created by calling js_create_ecmascript_module()
  * @param env     the result when calling js_create_env()
  * @param module  the result of js_create_ecmascript_module()
  */
-void js_destroy_module(void *env, void *module);
+void js_destroy_ecmascript_module(void *env, void *module);
 
 #ifdef __cplusplus
 }
