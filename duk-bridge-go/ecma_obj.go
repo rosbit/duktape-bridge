@@ -23,10 +23,6 @@ func wrapEcmaObject(ecmaObj unsafe.Pointer, isFunc bool) *EcmaObject {
 	return &EcmaObject{ecmaObj, isFunc}
 }
 
-func (m *EcmaObject) Destroy() {
-	if m.isFunc {
-		C.js_destroy_ecmascript_func(unsafe.Pointer(nil), m.ecmaObj);
-	} else {
-		C.js_destroy_ecmascript_module(unsafe.Pointer(nil), m.ecmaObj);
-	}
+func (m *EcmaObject) destroy(env unsafe.Pointer) {
+	C.js_destroy_ecmascript_obj(env, m.ecmaObj);
 }

@@ -28,7 +28,6 @@ import (
 type JSEnv struct {
 	env unsafe.Pointer
 	loaderKey []int64
-	ecmaModuleLoader *EcmaModuleLoader
 }
 
 /**
@@ -37,9 +36,8 @@ type JSEnv struct {
  * @return a new JSEnv if ok, otherwise nil
  */
 func NewEnv(loader GoModuleLoader) *JSEnv {
-	jsEnv := &JSEnv{C.js_create_env(nil), make([]int64, 0, 3), &EcmaModuleLoader{}}
+	jsEnv := &JSEnv{C.js_create_env(nil), make([]int64, 0, 3)}
 	jsEnv.addGoModuleLoader(&GoPluginModuleLoader{})
-	jsEnv.addGoModuleLoader(jsEnv.ecmaModuleLoader)
 	if loader != nil {
 		jsEnv.addGoModuleLoader(loader)
 	}
@@ -279,7 +277,7 @@ func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) 
 }
 
 func (ctx *JSEnv) DestoryEcmascriptFunc(ecmaFunc *EcmaObject) {
-	ecmaFunc.Destroy()
+	ecmaFunc.destroy(ctx.env)
 }
 
 func (ctx *JSEnv) CreateEcmascriptModule(structPtr interface{}) (*EcmaObject, error) {
@@ -287,5 +285,5 @@ func (ctx *JSEnv) CreateEcmascriptModule(structPtr interface{}) (*EcmaObject, er
 }
 
 func (ctx *JSEnv) DesctoryEcmascriptModule(module *EcmaObject) {
-	module.Destroy()
+	module.destroy(ctx.env)
 }

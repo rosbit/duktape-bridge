@@ -105,7 +105,7 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
 		*pRes = b
 	case C.rt_func:
-		*pRes = res
+		*pRes = wrapEcmaObject(res, true)
 	case C.rt_object, C.rt_array:
 		fallthrough
 	default:

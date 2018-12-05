@@ -72,6 +72,13 @@ void* js_create_env(const char *mod_path);
 void js_destroy_env(void *env);
 
 /**
+ * destroy ecmascript object. it is used as a base of some macros
+ * @param env       the result when calling js_create_env()
+ * @param ecma_obj  the ecmascript function or module
+ */
+void js_destroy_ecmascript_obj(void *env, void *ecma_obj);
+
+/**
  * prototype of a function to read a file content.
  * @param file_name   the name of file to be read
  * @param content     the pointer to the momery allocated by this function, and will be freed by the calling function.
@@ -247,7 +254,7 @@ int js_call_ecmascript_func(void *env, void *ecma_func, fn_call_func_res call_fu
  * release the saved ecmascript function.
  * @param ecma_func   the ecmascript function object which was transfered by calling fn_native_func() in js.
  */
-void js_destroy_ecmascript_func(void *env, void *ecma_func);
+#define js_destroy_ecmascript_func(env, ecma_func) js_destroy_ecmascript_obj(env, ecma_func)
 
 /* =================== utils to convert between double and void* ================== */
 void* double2voidp(double);
@@ -348,7 +355,7 @@ void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get
  * @param env     the result when calling js_create_env()
  * @param module  the result of js_create_ecmascript_module()
  */
-void js_destroy_ecmascript_module(void *env, void *module);
+#define js_destroy_ecmascript_module(env, module) js_destroy_ecmascript_obj(env, module)
 
 #ifdef __cplusplus
 }

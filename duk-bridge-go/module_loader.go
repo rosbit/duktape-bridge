@@ -272,20 +272,9 @@ func (ctx *JSEnv) struct2EcmaModule(structPtr interface{}) (*EcmaObject, error) 
 		return nil, fmt.Errorf("no methods found when initing module")
 	}
 
-	loaderKey := ctx.loaderKey[1] // the second loader
-	m := C.js_create_ecmascript_module(ctx.env, unsafe.Pointer(uintptr(loaderKey)), unsafe.Pointer(uintptr(modKey)), (*[0]byte)(nil), (*[0]byte)(nil), (*[0]byte)(C.go_finalizeModule)) // only set finalizer
+	loaderKey := ctx.loaderKey[0]
+	m := C.js_create_ecmascript_module(ctx.env, unsafe.Pointer(uintptr(loaderKey)), unsafe.Pointer(uintptr(modKey)), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule)) // only set finalizer
 
-	if m == unsafe.Pointer(nil) {
-		return nil, fmt.Errorf("failed to create ecmascript module")
-	}
-
-	loaderKey = ctx.ecmaModuleLoader.saveModule(m) // the real loaderKey
-
-	// set module methods and attributes
-	C.go_getMethodsList(unsafe.Pointer(uintptr(loaderKey)), (*C.char)(nil), unsafe.Pointer(uintptr(modKey)))
-	C.go_getAttrsList(unsafe.Pointer(uintptr(loaderKey)), (*C.char)(nil), unsafe.Pointer(uintptr(modKey)))
-
-	removeModuleLoader(loaderKey); // the real loaderKey is no use any more, release it.
 	return wrapEcmaObject(m, false), nil
 }
 

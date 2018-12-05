@@ -33,6 +33,17 @@
 #define NATIVE_MOD_ATTRS     "_nma_"
 #define NATIVE_MOD_FINALIZER "_nmf_"
 
+#define ECMA_OBJ "_eo_"
+
+static char *createHiddenSymbol(const char *type, int index) {
+	char *hiddenSymbol;
+	asprintf(&hiddenSymbol, "\xFF%s%d", type, index); //hidden symbol
+	return hiddenSymbol;
+}
+
+#define getNativeModNum(index) createHiddenSymbol(NATIVE_MOD, index)
+#define getEcmaObjNum(index) createHiddenSymbol(ECMA_OBJ, index)
+
 static void make_func_bridge(duk_context *ctx, const char *func_name, fn_native_func native_func, duk_idx_t nargs, void *udd);
 
 // the default implementation of readFileContent
@@ -139,6 +150,31 @@ static duk_ret_t unload_native_obj(duk_context *ctx) {
 	return 0;
 }
 
+static unsigned save_top_object(duk_context *ctx) {
+	static unsigned func_count = 0;
+	
+	unsigned func_index = func_count++;
+	char *funcName = getEcmaObjNum(func_index);
+	duk_put_global_string(ctx, funcName);
+	free(funcName);
+	return func_index;
+}
+
+static duk_bool_t load_object(duk_context *ctx, unsigned func_index) {
+	char *funcName = getEcmaObjNum(func_index);
+	duk_bool_t r = duk_get_global_string(ctx, funcName);
+	free(funcName);
+	return r;
+}
+
+static void destroy_object(duk_context *ctx, unsigned func_index) {
+	char *funcName = getEcmaObjNum(func_index);
+	duk_push_global_object(ctx);
+	duk_del_prop_string(ctx, -1, funcName);
+	duk_pop(ctx);
+	free(funcName);
+}
+
 void js_add_module_method(void *env, module_method_t *method)
 {
 	duk_context *ctx = (duk_context*)env;
@@ -175,7 +211,7 @@ void js_add_module_attr(void *env, module_attr_t *attr)
 		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
 		break;
 	case af_ecmafunc:
-		duk_xcopy_top(ctx, (duk_context*)attr->val, 1); // now the top ctx is [ func ]
+		load_object(ctx, (unsigned)(long)attr->val); // now the top ctx is [ func ]
 		break;
 	case af_buffer:
 	case af_jarray:
@@ -244,12 +280,6 @@ static int init_native_obj(duk_context *ctx, void *udd, const char *mod_home, co
 		}
 	}
 	return init_obj_ok;
-}
-
-static char *getNativeModNum(int index) {
-	char *modNum;
-	asprintf(&modNum, "\xFF%s%d", NATIVE_MOD, index); //hidden symbol
-	return modNum;
 }
 
 // load module with module loaders
@@ -547,10 +577,11 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 	case DUK_TYPE_OBJECT:
 		if (duk_is_ecmascript_function(ctx, -1)) {
 			res_type = rt_func;
-			// copy the function to a new context
-			duk_context* ecmaEnv = duk_create_heap_default();
-			duk_xcopy_top(ecmaEnv, ctx, 1); // now ecmaEnv contains only [ func ]
-			res = (void*)ecmaEnv; // save the context, which must be freed by calling js_destropy_ecmascript_func
+			// copy the function to the top
+			duk_push_null(ctx);   // [ ... null ]
+			duk_copy(ctx, -2, -1); // [ ... func ]
+			unsigned func_index = save_top_object(ctx); // [ ... ]
+			res = (void*)(long)func_index; // which must be freed by calling js_destropy_ecmascript_func
 			break;
 		}
 	default:
@@ -588,7 +619,7 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 	size_t l;
 	int d;
 	int i = 0;
-	duk_context *ecmaEnv; 
+	unsigned func_index;
 	while (*fmt) {
 		argc++;
 		switch (*fmt++) {
@@ -617,8 +648,8 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			duk_push_lstring(ctx, s, l);
 			break;
 		case af_ecmafunc:
-			ecmaEnv = (duk_context*)argv[i++];
-			duk_xcopy_top(ctx, ecmaEnv, 1); // now the top ctx is [ func ]
+			func_index = (unsigned)(long)argv[i++];
+			load_object(ctx, func_index); // now the top ctx is [ func ]
 			break;
 		case af_jarray:
 		case af_jobject:
@@ -770,10 +801,8 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 					// copy the function to the top
 					duk_push_null(ctx);   // [ ... null ]
 					duk_copy(ctx, i, -1); // [ ... func ]
-					duk_context* ecmaEnv = duk_create_heap_default();
-					duk_xcopy_top(ecmaEnv, ctx, 1); // now ecmaEnv contains only [ func ]
-					duk_pop(ctx); // pop up the copied func
-					args[j++] = (void*)ecmaEnv; // save the context, which must be freed by calling js_destropy_ecmascript_func
+					unsigned func_index = save_top_object(ctx); // [ ... ]
+					args[j++] = (void*)(long)func_index; // which must be freed by calling js_destropy_ecmascript_func
 					break;
 				}
 			default:
@@ -810,7 +839,7 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 		}
 		return 1;
 	case rt_func:
-		duk_xcopy_top(ctx, (duk_context*)cb_res, 1); // now the top of ctx is [ func ]
+		load_object(ctx, (unsigned)(long)cb_res); // now the top of ctx is [ func ]
 		return 1;
 	case rt_object:
 	default:
@@ -875,15 +904,15 @@ int js_unregister_native_func(void *env, const char *func_name)
 int js_call_ecmascript_func(void *env, void *ecma_func, fn_call_func_res call_func_res, void *udd, char *fmt, void *argv[])
 {
 	duk_context *ctx = (duk_context*)env;
-	duk_context *ecmaEnv = (duk_context*)ecma_func;
-	duk_xcopy_top(ctx, ecmaEnv, 1); // now ctx contains [ func ]
+	unsigned func_index = (unsigned)(long)ecma_func;
+	load_object(ctx, func_index);  // now ctx contains [ func ]
 	return push_args_and_call_func(ctx, "_ecmafunc_", call_func_res, udd, fmt, argv);
 }
 
-void js_destroy_ecmascript_func(void *env, void *ecma_func) {
-	duk_context* ctx = (duk_context*)ecma_func;
-	duk_pop(ctx);
-	duk_destroy_heap(ctx);
+void js_destroy_ecmascript_obj(void *env, void *ecma_obj) {
+	duk_context* ctx = (duk_context*)env;
+	unsigned func_index = (unsigned)(long)ecma_obj;
+	destroy_object(ctx, func_index);
 }
 
 void* double2voidp(double d) {
@@ -936,26 +965,15 @@ void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_mod
 
 void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
 {
-	// create a new context to init the new created module.
-	duk_context *ctx = duk_create_heap_default();
-	if (ctx == NULL) {
-		return NULL;
-	}
-
+	duk_context *ctx = (duk_context*)env;
 	int ret = init_native_obj(ctx, udd, (const char*)mod_handle, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
+	unsigned func_index;
 	switch (ret) {
 	case init_obj_ok:
-		return ctx;
+		func_index = save_top_object(ctx);
+		return (void*)(long)func_index;
 	case failed_to_init_obj:
 	default:
-		duk_destroy_heap(ctx);
 		return NULL;
 	}
-}
-
-void js_destroy_ecmascript_module(void *env, void *module)
-{
-	duk_context* ctx = (duk_context*)module;
-	duk_pop(ctx);
-	duk_destroy_heap(ctx);
 }

@@ -40,7 +40,7 @@ var (
 
 // go function with a js function type as a argument
 func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
-	defer jsFunc.Destroy()
+	defer jsEnv.DestoryEcmascriptFunc(jsFunc)
 
 	res := jsEnv.CallEcmascriptFunc(jsFunc, "string from duk-bridge-go")
 	handleCallFuncResult(res)
@@ -179,6 +179,7 @@ func main() {
 				handleCallFuncResult(res)
 			}
 		}
+		jsEnv.DesctoryEcmascriptModule(m)
 	}
 	jsEnv.Destroy()
 }

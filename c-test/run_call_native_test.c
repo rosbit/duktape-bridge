@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+static void *env = NULL;
+
 static void adder(void* udd, const char* fmt, void *args[], void **res, res_type_t *res_type, size_t *res_len, fn_free_res *free_res)
 {
 	if (fmt == NULL || fmt[0] == '\0' || fmt[1] == '\0') {
@@ -145,13 +147,13 @@ static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res
 	
 	void *ecmafunc = args[0]; // if ecmafunc was saved, it could be called times and times again
 	// call js func
-	void *m = js_create_ecmascript_module(NULL, NULL, NULL, get_methods, get_attrs, finalizer);
+	void *m = js_create_ecmascript_module(env, NULL, NULL, get_methods, get_attrs, finalizer);
 
 	//void* a = (void*)100;
 	//js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "i", &a);
 	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "F", &m);
-	js_destroy_ecmascript_func(NULL, ecmafunc);
-	js_destroy_ecmascript_module(NULL, m);
+	js_destroy_ecmascript_func(env, ecmafunc);
+	js_destroy_ecmascript_module(env, m);
 
 	*res_type = rt_int;
 	*res = (void*)(long)10000;
@@ -162,7 +164,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Usage: %s <script_file> ...\n", argv[0]);
 		return 1;
 	}
-	void *env = js_create_env(NULL);
+	env = js_create_env(NULL);
 	js_register_native_func(env, "adder", adder, 2, NULL);
 	js_register_native_func(env, "toJson", toJson, -1, NULL);
 	js_register_native_func(env, "jsCallback", jsCallback, 1, env);
