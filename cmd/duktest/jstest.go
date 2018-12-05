@@ -170,6 +170,7 @@ func main() {
 		jsEnv.UnregisterGoFunc("toJson")
 		jsEnv.UnregisterGoFunc("adder")
 		jsEnv.UnregisterGoFunc("jsCallback")
+		jsEnv.DesctoryEcmascriptModule(m)
 	case "-gomodule":
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gomodule() ----------\n")
@@ -179,7 +180,6 @@ func main() {
 				handleCallFuncResult(res)
 			}
 		}
-		jsEnv.DesctoryEcmascriptModule(m)
 	}
 	jsEnv.Destroy()
 }
