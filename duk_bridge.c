@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <dlfcn.h>
+#include <sys/time.h>
 #ifdef Darwin
 #include <mach-o/dyld.h>
 #else
@@ -35,9 +36,9 @@
 
 #define ECMA_OBJ "_eo_"
 
-static char *createHiddenSymbol(const char *type, int index) {
+static char *createHiddenSymbol(const char *type, unsigned long index) {
 	char *hiddenSymbol;
-	asprintf(&hiddenSymbol, "\xFF%s%d", type, index); //hidden symbol
+	asprintf(&hiddenSymbol, "\xFF%s%lu", type, index); //hidden symbol
 	return hiddenSymbol;
 }
 
@@ -150,24 +151,25 @@ static duk_ret_t unload_native_obj(duk_context *ctx) {
 	return 0;
 }
 
-static unsigned save_top_object(duk_context *ctx) {
-	static unsigned func_count = 0;
-	
-	unsigned func_index = func_count++;
+static unsigned long save_top_object(duk_context *ctx) {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	unsigned long func_index = (unsigned long)tv.tv_sec * 1000000 + (unsigned long)tv.tv_usec;
+
 	char *funcName = getEcmaObjNum(func_index);
 	duk_put_global_string(ctx, funcName);
 	free(funcName);
 	return func_index;
 }
 
-static duk_bool_t load_object(duk_context *ctx, unsigned func_index) {
+static duk_bool_t load_object(duk_context *ctx, unsigned long func_index) {
 	char *funcName = getEcmaObjNum(func_index);
 	duk_bool_t r = duk_get_global_string(ctx, funcName);
 	free(funcName);
 	return r;
 }
 
-static void destroy_object(duk_context *ctx, unsigned func_index) {
+static void destroy_object(duk_context *ctx, unsigned long func_index) {
 	char *funcName = getEcmaObjNum(func_index);
 	duk_push_global_object(ctx);
 	duk_del_prop_string(ctx, -1, funcName);
@@ -211,7 +213,7 @@ void js_add_module_attr(void *env, module_attr_t *attr)
 		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
 		break;
 	case af_ecmafunc:
-		load_object(ctx, (unsigned)(long)attr->val); // now the top ctx is [ func ]
+		load_object(ctx, (unsigned long)attr->val); // now the top ctx is [ func ]
 		break;
 	case af_buffer:
 	case af_jarray:
@@ -580,8 +582,8 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 			// copy the function to the top
 			duk_push_null(ctx);   // [ ... null ]
 			duk_copy(ctx, -2, -1); // [ ... func ]
-			unsigned func_index = save_top_object(ctx); // [ ... ]
-			res = (void*)(long)func_index; // which must be freed by calling js_destropy_ecmascript_func
+			unsigned long func_index = save_top_object(ctx); // [ ... ]
+			res = (void*)func_index; // which must be freed by calling js_destropy_ecmascript_func
 			break;
 		}
 	default:
@@ -648,7 +650,7 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			duk_push_lstring(ctx, s, l);
 			break;
 		case af_ecmafunc:
-			func_index = (unsigned)(long)argv[i++];
+			func_index = (unsigned long)argv[i++];
 			load_object(ctx, func_index); // now the top ctx is [ func ]
 			break;
 		case af_jarray:
@@ -801,8 +803,8 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 					// copy the function to the top
 					duk_push_null(ctx);   // [ ... null ]
 					duk_copy(ctx, i, -1); // [ ... func ]
-					unsigned func_index = save_top_object(ctx); // [ ... ]
-					args[j++] = (void*)(long)func_index; // which must be freed by calling js_destropy_ecmascript_func
+					unsigned long func_index = save_top_object(ctx); // [ ... ]
+					args[j++] = (void*)func_index; // which must be freed by calling js_destropy_ecmascript_func
 					break;
 				}
 			default:
@@ -839,7 +841,7 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 		}
 		return 1;
 	case rt_func:
-		load_object(ctx, (unsigned)(long)cb_res); // now the top of ctx is [ func ]
+		load_object(ctx, (unsigned long)cb_res); // now the top of ctx is [ func ]
 		return 1;
 	case rt_object:
 	default:
@@ -904,14 +906,14 @@ int js_unregister_native_func(void *env, const char *func_name)
 int js_call_ecmascript_func(void *env, void *ecma_func, fn_call_func_res call_func_res, void *udd, char *fmt, void *argv[])
 {
 	duk_context *ctx = (duk_context*)env;
-	unsigned func_index = (unsigned)(long)ecma_func;
+	unsigned long func_index = (unsigned long)ecma_func;
 	load_object(ctx, func_index);  // now ctx contains [ func ]
 	return push_args_and_call_func(ctx, "_ecmafunc_", call_func_res, udd, fmt, argv);
 }
 
 void js_destroy_ecmascript_obj(void *env, void *ecma_obj) {
 	duk_context* ctx = (duk_context*)env;
-	unsigned func_index = (unsigned)(long)ecma_obj;
+	unsigned long func_index = (unsigned long)ecma_obj;
 	destroy_object(ctx, func_index);
 }
 
@@ -967,11 +969,11 @@ void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get
 {
 	duk_context *ctx = (duk_context*)env;
 	int ret = init_native_obj(ctx, udd, (const char*)mod_handle, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
-	unsigned func_index;
+	unsigned long func_index;
 	switch (ret) {
 	case init_obj_ok:
 		func_index = save_top_object(ctx);
-		return (void*)(long)func_index;
+		return (void*)func_index;
 	case failed_to_init_obj:
 	default:
 		return NULL;
