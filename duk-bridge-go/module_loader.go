@@ -77,11 +77,14 @@ func go_loadModule(udd unsafe.Pointer, modHome *C.char, modName *C.char) unsafe.
 		// structP = structP.Elem() // strucP is not pointer in such case
 	}
 
+	modKey, _ := createMethodKeys(structPtr, structP)
+	/*
 	modKey, methodKeys := createMethodKeys(structPtr, structP)
 	if methodKeys == nil {
 		fmt.Printf("no methods found when initing %s\n", goModName)
 		return unsafe.Pointer(nil)
 	}
+	*/
 
 	return unsafe.Pointer(uintptr(modKey))
 }
@@ -267,13 +270,16 @@ func (ctx *JSEnv) struct2EcmaModule(structPtr interface{}) (*EcmaObject, error) 
 		// structP = structP.Elem() // strucP is not pointer in such case
 	}
 
+	modKey, _ := createMethodKeys(structPtr, structP)
+	/*
 	modKey, methodKeys := createMethodKeys(structPtr, structP)
 	if methodKeys == nil {
 		return nil, fmt.Errorf("no methods found when initing module")
 	}
+	*/
 
 	loaderKey := ctx.loaderKey[0]
-	m := C.js_create_ecmascript_module(ctx.env, unsafe.Pointer(uintptr(loaderKey)), unsafe.Pointer(uintptr(modKey)), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule)) // only set finalizer
+	m := C.js_create_ecmascript_module(ctx.env, unsafe.Pointer(uintptr(loaderKey)), unsafe.Pointer(uintptr(modKey)), (*[0]byte)(C.go_getMethodsList), (*[0]byte)(C.go_getAttrsList), (*[0]byte)(C.go_finalizeModule))
 
 	return wrapEcmaObject(m, false), nil
 }

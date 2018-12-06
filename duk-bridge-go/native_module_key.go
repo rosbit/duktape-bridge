@@ -67,16 +67,16 @@ func getModInfo(modKey int64) *goModuleInfo {
 }
 
 func createMethodKeys(structPtr interface{}, structP reflect.Value) (int64, []int64) {
-	nMethods := structP.NumMethod()
-	if nMethods == 0 {
-		return 0, nil
-	}
+	var methodKeys []int64
 
-	methodKeys := make([]int64, nMethods)
-	for i:=0; i<nMethods; i++ {
-		methodF := structP.Method(i)
-		methodKey, _ := methodKeyGenerator.V2K(&methodF)
-		methodKeys[i] = methodKey.(int64)
+	nMethods := structP.NumMethod()
+	if nMethods > 0 {
+		methodKeys = make([]int64, nMethods)
+		for i:=0; i<nMethods; i++ {
+			methodF := structP.Method(i)
+			methodKey, _ := methodKeyGenerator.V2K(&methodF)
+			methodKeys[i] = methodKey.(int64)
+		}
 	}
 
 	goModule := &goModuleInfo{structPtr, structP, nMethods, methodKeys}

@@ -276,7 +276,7 @@ func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) 
 	return res
 }
 
-func (ctx *JSEnv) DestoryEcmascriptFunc(ecmaFunc *EcmaObject) {
+func (ctx *JSEnv) DestroyEcmascriptFunc(ecmaFunc *EcmaObject) {
 	ecmaFunc.destroy(ctx.env)
 }
 
@@ -284,6 +284,6 @@ func (ctx *JSEnv) CreateEcmascriptModule(structPtr interface{}) (*EcmaObject, er
 	return ctx.struct2EcmaModule(structPtr)
 }
 
-func (ctx *JSEnv) DesctoryEcmascriptModule(module *EcmaObject) {
+func (ctx *JSEnv) DestroyEcmascriptModule(module *EcmaObject) {
 	module.destroy(ctx.env)
 }

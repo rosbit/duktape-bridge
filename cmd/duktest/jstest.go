@@ -40,7 +40,7 @@ var (
 
 // go function with a js function type as a argument
 func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
-	defer jsEnv.DestoryEcmascriptFunc(jsFunc)
+	defer jsEnv.DestroyEcmascriptFunc(jsFunc)
 
 	res := jsEnv.CallEcmascriptFunc(jsFunc, "string from duk-bridge-go")
 	handleCallFuncResult(res)
@@ -111,8 +111,8 @@ func main() {
 		fmt.Printf("Unknown option %s\n", os.Args[1])
 		return
 	}
-	jsEnv = js.NewEnv(&testModuleLoader{})
-	// jsEnv = js.NewEnv(nil)
+	// jsEnv = js.NewEnv(&testModuleLoader{})
+	jsEnv = js.NewEnv(nil)
 
 	argc := len(os.Args)
 	switch os.Args[1] {
@@ -170,7 +170,7 @@ func main() {
 		jsEnv.UnregisterGoFunc("toJson")
 		jsEnv.UnregisterGoFunc("adder")
 		jsEnv.UnregisterGoFunc("jsCallback")
-		jsEnv.DesctoryEcmascriptModule(m)
+		jsEnv.DestroyEcmascriptModule(m)
 	case "-gomodule":
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gomodule() ----------\n")

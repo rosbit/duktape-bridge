@@ -371,33 +371,57 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 					l := int(uintptr(arrArgs[j]))
 					s := (*C.char)(arrArgs[j+1])
 					j += 2
-					argv[i] = reflect.ValueOf(*(toString(s, l)))
+					switch funArgType.Kind() {
+					case reflect.Slice:
+						argv[i] = reflect.ValueOf(toBytes(s, l))
+					default:
+						argv[i] = reflect.ValueOf(*(toString(s, l)))
+					}
 				case C.af_buffer:
 					l := int(uintptr(arrArgs[j]))
 					s := (*C.char)(arrArgs[j+1])
 					j += 2
-					argv[i] = reflect.ValueOf(toBytes(s, l))
+					switch funArgType.Kind() {
+					case reflect.String:
+						argv[i] = reflect.ValueOf(*(toString(s, l)))
+					default:
+						argv[i] = reflect.ValueOf(toBytes(s, l))
+					}
 				case C.af_jobject:
 					l := int(uintptr(arrArgs[j]))
 					s := (*C.char)(arrArgs[j+1])
 					j += 2
-					b := toBytes(s, l)
-					var o map[string]interface{}
-					if json.Unmarshal(b, &o) == nil {
-						argv[i] = reflect.ValueOf(o)
-					} else {
-						argv[i] = reflect.Zero(funArgType)
+					switch funArgType.Kind() {
+					case reflect.String:
+						argv[i] = reflect.ValueOf(*(toString(s, l)))
+					case reflect.Slice:
+						argv[i] = reflect.ValueOf(toBytes(s, l))
+					default:
+						b := toBytes(s, l)
+						var o map[string]interface{}
+						if json.Unmarshal(b, &o) == nil {
+							argv[i] = reflect.ValueOf(o)
+						} else {
+							argv[i] = reflect.Zero(funArgType)
+						}
 					}
 				case C.af_jarray:
 					l := int(uintptr(arrArgs[j]))
 					s := (*C.char)(arrArgs[j+1])
 					j += 2
-					b := toBytes(s, l)
-					var a []interface{}
-					if json.Unmarshal(b, &a) == nil {
-						argv[i] = reflect.ValueOf(a)
-					} else {
-						argv[i] = reflect.Zero(funArgType)
+					switch funArgType.Kind() {
+					case reflect.String:
+						argv[i] = reflect.ValueOf(*(toString(s, l)))
+					case reflect.Slice:
+						argv[i] = reflect.ValueOf(toBytes(s, l))
+					default:
+						b := toBytes(s, l)
+						var a []interface{}
+						if json.Unmarshal(b, &a) == nil {
+							argv[i] = reflect.ValueOf(a)
+						} else {
+							argv[i] = reflect.Zero(funArgType)
+						}
 					}
 				case C.af_ecmafunc:
 					argv[i] = reflect.ValueOf(wrapEcmaObject(arrArgs[j], true))
