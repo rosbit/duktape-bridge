@@ -621,7 +621,7 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 	size_t l;
 	int d;
 	int i = 0;
-	unsigned func_index;
+	unsigned long func_index;
 	while (*fmt) {
 		argc++;
 		switch (*fmt++) {
