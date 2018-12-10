@@ -212,10 +212,16 @@ void js_add_module_attr(void *env, module_attr_t *attr)
 	case af_lstring:
 		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
 		break;
+	case af_buffer:
+		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
+		duk_to_buffer(ctx, -1, NULL);
+		duk_push_buffer_object(ctx, -1, 0, attr->val_len, DUK_BUFOBJ_NODEJS_BUFFER);
+		duk_swap_top(ctx, -2);
+		duk_pop(ctx);
+		break;
 	case af_ecmafunc:
 		load_object(ctx, (unsigned long)attr->val); // now the top ctx is [ func ]
 		break;
-	case af_buffer:
 	case af_jarray:
 	case af_jobject:
 	default:
@@ -586,6 +592,11 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 			res = (void*)func_index; // which must be freed by calling js_destropy_ecmascript_func
 			break;
 		}
+		if (duk_is_buffer_data(ctx, -1)) {
+			res_type = rt_buffer;
+			res = (void*)duk_get_buffer_data(ctx, -1, &len);
+			break;
+		}
 	default:
 		res_type = duk_is_array(ctx, -1) ? rt_array : rt_object;
 		duk_json_encode(ctx, -1);
@@ -648,6 +659,15 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			l = (size_t)argv[i++];
 			s = (char*)argv[i++];
 			duk_push_lstring(ctx, s, l);
+			break;
+		case af_buffer:
+			l = (size_t)argv[i++];
+			s = (char*)argv[i++];
+			duk_push_lstring(ctx, s, l);
+			duk_to_buffer(ctx, -1, NULL);
+			duk_push_buffer_object(ctx, -1, 0, l, DUK_BUFOBJ_NODEJS_BUFFER);
+			duk_swap_top(ctx, -2);
+			duk_pop(ctx);
 			break;
 		case af_ecmafunc:
 			func_index = (unsigned long)argv[i++];
@@ -807,6 +827,13 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 					args[j++] = (void*)func_index; // which must be freed by calling js_destropy_ecmascript_func
 					break;
 				}
+				if (duk_is_buffer_data(ctx, i)) {
+					fmt[i] = af_buffer;
+					args[j+1] = duk_get_buffer_data(ctx, i, &len);
+					args[j] = (void*)len;
+					j += 2;
+					break;
+				}
 			default:
 				fmt[i] = duk_is_array(ctx, i) ? af_jarray : af_jobject;
 				duk_json_encode(ctx, i);
@@ -840,10 +867,21 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 			free_res(cb_res);
 		}
 		return 1;
+	case rt_buffer:
+		duk_push_lstring(ctx, (const char*)cb_res, res_len);
+		duk_to_buffer(ctx, -1, NULL);
+		duk_push_buffer_object(ctx, -1, 0, res_len, DUK_BUFOBJ_NODEJS_BUFFER);
+		duk_swap_top(ctx, -2);
+		duk_pop(ctx);
+		if (free_res != NULL) {
+			free_res(cb_res);
+		}
+		return 1;
 	case rt_func:
 		load_object(ctx, (unsigned long)cb_res); // now the top of ctx is [ func ]
 		return 1;
 	case rt_object:
+	case rt_array:
 	default:
 		duk_push_lstring(ctx, (const char*)cb_res, res_len);
 		duk_json_decode(ctx, -1);

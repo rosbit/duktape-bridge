@@ -69,6 +69,10 @@ static void toJson(void* udd, const char* fmt, void *args[], void **res, res_typ
 			len += sprintf(r+len, "\"%.*s\",", (int)(long)args[j], (const char*)args[j+1]);
 			j += 2;
 			break;
+		case af_buffer:
+			len += sprintf(r+len, "\"%.*s\",", (int)(long)args[j], (const char*)args[j+1]);
+			j += 2;
+			break;
 		default:
 			break;
 		}
@@ -79,7 +83,7 @@ static void toJson(void* udd, const char* fmt, void *args[], void **res, res_typ
 		r[len++] = '}';
 	}
 	r[len] = '\0'; 
-	*res_len  = strlen(r);
+	*res_len  = len;
 	*free_res = free_json;
 	*res = r;
 }

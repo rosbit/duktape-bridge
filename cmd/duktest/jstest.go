@@ -29,7 +29,13 @@ func toJson(args ...interface{}) interface{} {
 			m[fmt.Sprintf("v%d", i)] = nil
 			continue
 		}
-		m[fmt.Sprintf("v%d", i)] = args[i]
+
+		switch args[i].(type) {
+		case []byte:
+			m[fmt.Sprintf("v%d", i)] = string(args[i].([]byte))
+		default:
+			m[fmt.Sprintf("v%d", i)] = args[i]
+		}
 	}
 	return m
 }
@@ -42,7 +48,7 @@ var (
 func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
 	defer jsEnv.DestroyEcmascriptFunc(jsFunc)
 
-	res := jsEnv.CallEcmascriptFunc(jsFunc, "string from duk-bridge-go")
+	res := jsEnv.CallEcmascriptFunc(jsFunc, []byte("string from duk-bridge-go"))
 	handleCallFuncResult(res)
 
 	return m

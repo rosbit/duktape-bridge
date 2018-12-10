@@ -197,7 +197,7 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 			argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
 			j += 2
 		case []byte:
-			fmt[i] = C.af_lstring
+			fmt[i] = C.af_buffer
 			getBytesPtrLen(arg.([]byte), &p, &pLen)
 			argv[j] = uint64(pLen)
 			argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
@@ -263,15 +263,16 @@ func resToJson(res interface{}, out_res *unsafe.Pointer, res_type *C.int, res_le
 }
 
 func setBuffer(res interface{}, out_res *unsafe.Pointer, res_type *C.int, res_len *C.size_t) {
-	*res_type = C.rt_string
 	var cs *C.char
 	var cl C.int
 
 	switch res.(type) {
 	case string:
+		*res_type = C.rt_string
 		s := res.(string)
 		getStrPtrLen(&s, &cs, &cl)
 	case []byte:
+		*res_type = C.rt_buffer
 		b := res.([]byte)
 		getBytesPtrLen(b, &cs, &cl)
 	}
