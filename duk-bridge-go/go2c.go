@@ -16,6 +16,7 @@ import (
 	"unsafe"
 	"reflect"
 	"encoding/json"
+	"errors"
 )
 
 func getStrPtr(goStr *string, val **C.char) {
@@ -87,17 +88,9 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 	case C.rt_bool:
 		*pRes = uint64(uintptr(res)) != 0
 	case C.rt_double:
-		// p := uint64(uintptr(res))
-		// *pRes = *(*float64)(unsafe.Pointer(&p))
 		*pRes = C.voidp2double(res)
 	case C.rt_string:
-		var b []byte     // no allocation
-
-		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-		bs.Data = uintptr(res)
-		bs.Len = int(res_len)
-		bs.Cap = int(res_len)
-
+		b := toBytes((*C.char)(res), int(res_len))
 		*pRes = string(b) // copy to string
 	case C.rt_buffer:
 		b := make([]byte, res_len) // allocate the memory to store the result.
@@ -106,16 +99,13 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 		*pRes = b
 	case C.rt_func:
 		*pRes = wrapEcmaObject(res, true)
+	case C.rt_error:
+		b := toBytes((*C.char)(res), int(res_len))
+		*pRes = errors.New(*(*string)(unsafe.Pointer(&b)))
 	case C.rt_object, C.rt_array:
 		fallthrough
 	default:
-		var b []byte     // no allocation
-
-		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-		bs.Data = uintptr(res)
-		bs.Len = int(res_len)
-		bs.Cap = int(res_len)
-
+		b := toBytes((*C.char)(res), int(res_len))
 		if err := json.Unmarshal(b, pRes); err != nil {
 			*pRes = err
 		}
@@ -275,6 +265,10 @@ func setBuffer(res interface{}, out_res *unsafe.Pointer, res_type *C.int, res_le
 		*res_type = C.rt_buffer
 		b := res.([]byte)
 		getBytesPtrLen(b, &cs, &cl)
+	case error:
+		*res_type = C.rt_error
+		s := (res.(error)).Error()
+		getStrPtrLen(&s, &cs, &cl)
 	}
 
 	*res_len = C.size_t(cl)
@@ -439,14 +433,35 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		}
 	}
 
-	if r == nil || len(r) > 1 {
+	if r == nil || len(r) > 2 {
 		*res_type = C.rt_none
 		*out_res = unsafe.Pointer(uintptr(0))
 		return
 	}
 
+	if len(r) == 2 {
+		// if 2 returned values, the 2nd must be error
+		resV := r[1]
+		res := resV.Interface()
+		if res != nil {
+			switch res.(type) {
+			case error:
+				setBuffer(res, out_res, res_type, res_len)
+				return
+			default:
+				*res_type = C.rt_none
+				*out_res = unsafe.Pointer(uintptr(0))
+				return
+			}
+		}
+	}
+
 	resV := r[0]
 	res := resV.Interface()
+	if res == nil {
+		*res_type = C.rt_none
+		*out_res = unsafe.Pointer(uintptr(0))
+	}
 	switch res.(type) {
 	case bool:
 		*res_type = C.rt_bool
@@ -473,6 +488,8 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 	case string:
 		setBuffer(res, out_res, res_type, res_len)
 	case []byte:
+		setBuffer(res, out_res, res_type, res_len)
+	case error:
 		setBuffer(res, out_res, res_type, res_len)
 	case map[string]interface{}:
 		resToJson(res, out_res, res_type, res_len)

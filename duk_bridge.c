@@ -216,8 +216,7 @@ void js_add_module_attr(void *env, module_attr_t *attr)
 		duk_push_lstring(ctx, (char*)attr->val, attr->val_len);
 		duk_to_buffer(ctx, -1, NULL);
 		duk_push_buffer_object(ctx, -1, 0, attr->val_len, DUK_BUFOBJ_NODEJS_BUFFER);
-		duk_swap_top(ctx, -2);
-		duk_pop(ctx);
+		duk_remove(ctx, -2);
 		break;
 	case af_ecmafunc:
 		load_object(ctx, (unsigned long)attr->val); // now the top ctx is [ func ]
@@ -597,6 +596,11 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 			res = (void*)duk_get_buffer_data(ctx, -1, &len);
 			break;
 		}
+		if (duk_is_error(ctx, -1)) {
+			res_type = rt_error;
+			res = (void*)duk_safe_to_lstring(ctx, -1, &len);
+			break;
+		}
 	default:
 		res_type = duk_is_array(ctx, -1) ? rt_array : rt_object;
 		duk_json_encode(ctx, -1);
@@ -609,15 +613,18 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 static int call_func(duk_context *ctx, int argc, const char *func_name, fn_call_func_res call_func_res, void *udd) {
 	// [ func, args ... ]
 	duk_int_t rc = duk_pcall(ctx, argc); // [ retval ]
+	/*
 	if (rc != DUK_EXEC_SUCCESS) {
 		fprintf(stderr, "failed to run %s() %s\n", func_name, duk_safe_to_string(ctx, -1));
 		duk_pop(ctx);
 		return -2;
-	}
+	}*/
 
-	call_result_callback(ctx, call_func_res, udd);
+	if (call_func_res != NULL) {
+		call_result_callback(ctx, call_func_res, udd);
+	}
 	duk_pop(ctx);
-	return 0;
+	return (rc == DUK_EXEC_SUCCESS) ? 0 : -2;
 }
 
 static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_call_func_res call_func_res, void *udd, char *fmt, void *argv[])
@@ -666,8 +673,7 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			duk_push_lstring(ctx, s, l);
 			duk_to_buffer(ctx, -1, NULL);
 			duk_push_buffer_object(ctx, -1, 0, l, DUK_BUFOBJ_NODEJS_BUFFER);
-			duk_swap_top(ctx, -2);
-			duk_pop(ctx);
+			duk_remove(ctx, -2);
 			break;
 		case af_ecmafunc:
 			func_index = (unsigned long)argv[i++];
@@ -725,17 +731,18 @@ int js_eval(void *env, const char *js_code, size_t len, fn_call_func_res call_fu
 {
 	duk_context *ctx = (duk_context*)env;
 	duk_int_t ret = duk_peval_lstring(ctx, js_code, len); // [ retval ]
+	/*
 	if (ret != 0) {
 		const char *err = duk_safe_to_string(ctx, -1);
 		fprintf(stderr, "error: %s\n", err);
 		duk_pop(ctx);
 		return -1;
-	}
+	} */
 	if (call_func_res != NULL) {
 		call_result_callback(ctx, call_func_res, udd);
 	}
 	duk_pop(ctx);
-	return 0;
+	return (ret == 0) ? 0: -1;
 }
 
 int js_eval_file(void *env, const char *script_file, fn_call_func_res call_func_res, void *udd)
@@ -749,17 +756,18 @@ int js_eval_file(void *env, const char *script_file, fn_call_func_res call_func_
 	}
 	ret = duk_peval_lstring(ctx, src, size);
 	free(src);
+	/*
 	if (ret != 0) {
 		const char *err = duk_safe_to_string(ctx, -1);
 		fprintf(stderr, "error to js_eval_file: %s\n", err);
 		duk_pop(ctx);
 		return -10;
-	}
+	} */
 	if (call_func_res != NULL) {
 		call_result_callback(ctx, call_func_res, udd);
 	}
 	duk_pop(ctx);
-	return 0;
+	return (ret == 0) ? 0 : -10;
 }
 
 static duk_ret_t native_func_bridge(duk_context *ctx)
@@ -871,8 +879,7 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 		duk_push_lstring(ctx, (const char*)cb_res, res_len);
 		duk_to_buffer(ctx, -1, NULL);
 		duk_push_buffer_object(ctx, -1, 0, res_len, DUK_BUFOBJ_NODEJS_BUFFER);
-		duk_swap_top(ctx, -2);
-		duk_pop(ctx);
+		duk_remove(ctx, -2);
 		if (free_res != NULL) {
 			free_res(cb_res);
 		}
@@ -880,6 +887,8 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 	case rt_func:
 		load_object(ctx, (unsigned long)cb_res); // now the top of ctx is [ func ]
 		return 1;
+	case rt_error:
+		return duk_generic_error(ctx, "%.*s", (int)res_len, (const char*)cb_res);
 	case rt_object:
 	case rt_array:
 	default:

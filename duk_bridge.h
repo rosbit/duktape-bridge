@@ -23,7 +23,8 @@ typedef enum {
 	af_buffer  = 'B',
 	af_jarray  = 'a',
 	af_jobject = 'o',
-	af_ecmafunc= 'F'
+	af_ecmafunc= 'F',
+	af_error   = 'E',
 } arg_format_t;
 
 /** type value for describe fn_native_func() argument `res` */
@@ -37,6 +38,7 @@ typedef enum {
 	rt_buffer, // binary data, same as rt_string, but binary data can contain any character.
 	rt_array,  // same as rt_object, but the JSON string is converted from array.
 	rt_func,   // ecmascript function object.
+	rt_error,  // error object
 	total_rt
 } res_type_t;
 
@@ -52,6 +54,7 @@ typedef enum {
  *                   rt_object: values in res and res_len are pointer and length of a string in JSON format.
  *                   rt_func: value in res is an ecmascript function,
  *                            which must be released by calling js_destroy_ecmascript_func()
+ *                   rt_error: values in res and res_len are error string and length
  * @param res      the pointer to the result. the result is in JSON format
  * @param res_len  count of bytes in res.
  */

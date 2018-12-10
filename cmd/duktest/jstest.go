@@ -15,13 +15,13 @@ func adder(a1, a2 float64) float64 {
 	return a1 + a2
 }
 
-func toJson(args ...interface{}) interface{} {
+func toJson(args ...interface{}) (interface{}, error) {
 	if args == nil {
-		return nil
+		return nil, nil
 	}
 	c := len(args)
 	if c == 0 {
-		return "nothing"
+		return nil, fmt.Errorf("nothing")
 	}
 	m := make(map[string]interface{})
 	for i:=0; i<c; i++ {
@@ -37,7 +37,7 @@ func toJson(args ...interface{}) interface{} {
 			m[fmt.Sprintf("v%d", i)] = args[i]
 		}
 	}
-	return m
+	return m, nil
 }
 
 var (
@@ -60,7 +60,7 @@ func (m *testDukModule) Adder(a1, a2 float64) float64 {
 	return adder(a1, a2)
 }
 
-func (m *testDukModule) ToJson(args ...interface{}) interface{} {
+func (m *testDukModule) ToJson(args ...interface{}) (interface{}, error) {
 	return toJson(args...)
 }
 

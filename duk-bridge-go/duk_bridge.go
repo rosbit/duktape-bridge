@@ -65,6 +65,17 @@ func fromErrorCode(res C.int) error {
 	return fmt.Errorf("error code: %d", int(res))
 }
 
+func parseResult(res interface{}, ret C.int) (interface{}, error) {
+	switch res.(type) {
+	case error:
+		return nil, res.(error)
+	}
+	if ret != C.int(0) {
+		return nil, fromErrorCode(ret)
+	}
+	return res, nil
+}
+
 /**
  * evaluate any lines of JS codes.
  * @param jsCode  JS syntax satisfied codes.
@@ -77,10 +88,7 @@ func (ctx *JSEnv) Eval(jsCode string) (interface{}, error) {
 
 	var res interface{} = nil // pointer to result
 	ret := C.js_eval(ctx.env, s, C.size_t(l), (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res))
-	if ret != C.int(0) {
-		return nil, fromErrorCode(ret)
-	}
-	return res, nil
+	return parseResult(res, ret)
 }
 
 /**
@@ -95,10 +103,7 @@ func (ctx *JSEnv) EvalBytes(jsCode []byte) (interface{}, error) {
 
 	var res interface{} = nil // pointer to result
 	ret := C.js_eval(ctx.env, s, C.size_t(l), (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res))
-	if ret != C.int(0) {
-		return nil, fromErrorCode(ret)
-	}
-	return res, nil
+	return parseResult(res, ret)
 }
 
 /**
@@ -112,10 +117,7 @@ func (ctx *JSEnv) EvalFile(scriptFile string) (interface{}, error) {
 
 	var res interface{} = nil // pointer to result
 	ret := C.js_eval_file(ctx.env, f,  (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res))
-	if ret != C.int(0) {
-		return nil, fromErrorCode(ret)
-	}
-	return res, nil
+	return parseResult(res, ret)
 }
 
 /**

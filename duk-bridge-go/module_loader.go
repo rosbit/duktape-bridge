@@ -153,6 +153,11 @@ func go_getAttrsList(udd unsafe.Pointer, modName *C.char, modHandle unsafe.Point
 		field := structP.Field(i)
 		fieldV := structT.Field(i)
 
+		firstLetter := fieldV.Name[0]
+		if firstLetter == '_' || (firstLetter >= 'a' && firstLetter <= 'z') {
+			continue
+		}
+
 		c_attr.name = C.CString(fieldV.Name)
 		*(c_attr.name) = C.char(C.tolower(C.int(*(c_attr.name))))
 		defer C.free(unsafe.Pointer(c_attr.name))
