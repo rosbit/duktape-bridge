@@ -613,13 +613,6 @@ static void call_result_callback(duk_context *ctx, fn_call_func_res call_func_re
 static int call_func(duk_context *ctx, int argc, const char *func_name, fn_call_func_res call_func_res, void *udd) {
 	// [ func, args ... ]
 	duk_int_t rc = duk_pcall(ctx, argc); // [ retval ]
-	/*
-	if (rc != DUK_EXEC_SUCCESS) {
-		fprintf(stderr, "failed to run %s() %s\n", func_name, duk_safe_to_string(ctx, -1));
-		duk_pop(ctx);
-		return -2;
-	}*/
-
 	if (call_func_res != NULL) {
 		call_result_callback(ctx, call_func_res, udd);
 	}
@@ -731,13 +724,6 @@ int js_eval(void *env, const char *js_code, size_t len, fn_call_func_res call_fu
 {
 	duk_context *ctx = (duk_context*)env;
 	duk_int_t ret = duk_peval_lstring(ctx, js_code, len); // [ retval ]
-	/*
-	if (ret != 0) {
-		const char *err = duk_safe_to_string(ctx, -1);
-		fprintf(stderr, "error: %s\n", err);
-		duk_pop(ctx);
-		return -1;
-	} */
 	if (call_func_res != NULL) {
 		call_result_callback(ctx, call_func_res, udd);
 	}
@@ -752,17 +738,15 @@ int js_eval_file(void *env, const char *script_file, fn_call_func_res call_func_
 	size_t size;
 	int ret = readFileContent(script_file, &src, &size);
 	if (ret != 0) {
+		if (ret == -1 && call_func_res != NULL) {
+			duk_push_error_object(ctx, DUK_ERR_ERROR, "%s not found", script_file);
+			call_result_callback(ctx, call_func_res, udd);
+			duk_pop(ctx);
+		}
 		return ret;
 	}
 	ret = duk_peval_lstring(ctx, src, size);
 	free(src);
-	/*
-	if (ret != 0) {
-		const char *err = duk_safe_to_string(ctx, -1);
-		fprintf(stderr, "error to js_eval_file: %s\n", err);
-		duk_pop(ctx);
-		return -10;
-	} */
 	if (call_func_res != NULL) {
 		call_result_callback(ctx, call_func_res, udd);
 	}
