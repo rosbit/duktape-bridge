@@ -19,7 +19,7 @@ from Go function to JavaScript function.
 
 The Go bridge can also make your Go package to a Duktape JavaScript module. So
 what you can do is just writing `var mod = require('your_module')`, your Go package is
-ready to be called by JS. See sample application [Mini Node.js](https://github.com/rosbit/mini_node).
+ready to be called by JS. See sample application [gojs](https://github.com/rosbit/gojs).
 
 ### Usage
 
@@ -78,7 +78,7 @@ func main() {
   ctx := js.NewEnv(nil)
   defer ctx.Destroy()
 
-  res := ctx.CallFileFunc("a.js", "args 1", 2, true, "other args") // only filename is needed.
+  res, _ := ctx.CallFileFunc("a.js", "args 1", 2, true, "other args") // only filename is needed.
   fmt.Println("result is:", res)
 
   /*
@@ -129,10 +129,12 @@ console.log(r)
 If a Go function registered to be called by JS, the types of its arguments and result
 must meet some satisfications:
 
- - primitive type bool, int, intXX, uintXX, float32, float64 are acceptable
+ - any primitive type bool, int, intXX, uintXX, float32, float64 are acceptable
  - string and []byte are acceptable
- - array slice of bool, int, intXX, uintXX, float32, float64, string are acceptable. e.g. []bool, []int
- - map with string as the type of key is acceptable. e.g. map[string]interface{}
+ - array slice of primitive types and string are acceptable. e.g. []bool, []int
+ - map with string as the key type is acceptable. e.g. map[string]interface{}
+ - the returned result can contains at most 2 result. If it has 2 results, the 2nd
+   one must be type `error`. The non-nil error will cause a js exception.
 
 ### Go module and module loader
 
