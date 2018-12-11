@@ -4,7 +4,7 @@ import (
 	js "github.com/rosbit/duktape-bridge/duk-bridge-go"
 	"os"
 	"fmt"
-	"encoding/json"
+	// "encoding/json"
 )
 
 var (
@@ -48,8 +48,12 @@ var (
 func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
 	defer jsEnv.DestroyEcmascriptFunc(jsFunc)
 
-	res := jsEnv.CallEcmascriptFunc(jsFunc, []byte("string from duk-bridge-go"))
-	handleCallFuncResult(res)
+	res, err := jsEnv.CallEcmascriptFunc(jsFunc, []byte("string from duk-bridge-go"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	} else {
+		handleCallFuncResult(res)
+	}
 
 	return m
 }
@@ -83,6 +87,7 @@ func handleCallFuncResult(res interface{}) {
 		switch res.(type) {
 		case []byte:
 			fmt.Printf("result: (bytes)%s\n", string(res.([]byte)))
+		/*
 		case []interface{}:
 			if b, err := json.Marshal(res); err == nil {
 				fmt.Printf("result: (array)%s\n", string(b))
@@ -95,6 +100,7 @@ func handleCallFuncResult(res interface{}) {
 			} else {
 				fmt.Printf("result: (object)%v\n", res)
 			}
+		*/
 		default:
 			fmt.Printf("result: %v\n", res)
 		}
@@ -142,8 +148,12 @@ func main() {
 			// res := jsEnv.CallFunc("test", map[string]interface{}{"Hello":1, "name":"haha"})
 			// res := jsEnv.CallFunc("test", fmt.Sprintf("%s %s", "hello", "test"), 1.8)
 			// res := jsEnv.CallFunc("test", "hello", "test", 1.8)
-			res := jsEnv.CallFunc("test", "hello", "test", 1.8, []int{1, 3})
-			handleCallFuncResult(res)
+			res, err := jsEnv.CallFunc("test", "hello", "test", 1.8, []int{1, 3})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			} else {
+				handleCallFuncResult(res)
+			}
 			jsEnv.UnregisterFunc("test")
 		}
 	case "-jsfile":
@@ -152,8 +162,12 @@ func main() {
 			// res := jsEnv.CallFunc("test", map[string]interface{}{"Hello":1, "name":"haha"})
 			// res := jsEnv.CallFunc("test", fmt.Sprintf("%s %s", "hello", "test"), 1.8)
 			// res := jsEnv.CallFunc("test", "hello", "test", 1.8)
-			res := jsEnv.CallFileFunc(os.Args[i], "hello", "test", 1.8, []int{1, 3})
-			handleCallFuncResult(res)
+			res, err := jsEnv.CallFileFunc(os.Args[i], "hello", "test", 1.8, []int{1, 3})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			} else {
+				handleCallFuncResult(res)
+			}
 		}
 	case "-gofunc":
 		err := jsEnv.RegisterGoFunc("toJson", toJson)

@@ -92,23 +92,23 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 	case C.rt_string:
 		b := toBytes((*C.char)(res), int(res_len))
 		*pRes = string(b) // copy to string
-	case C.rt_buffer:
-		b := make([]byte, res_len) // allocate the memory to store the result.
-		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
-		*pRes = b
 	case C.rt_func:
 		*pRes = wrapEcmaObject(res, true)
 	case C.rt_error:
 		b := toBytes((*C.char)(res), int(res_len))
 		*pRes = errors.New(*(*string)(unsafe.Pointer(&b)))
-	case C.rt_object, C.rt_array:
-		fallthrough
 	default:
+		fallthrough
+	case C.rt_buffer, C.rt_object, C.rt_array:
+		/*
 		b := toBytes((*C.char)(res), int(res_len))
 		if err := json.Unmarshal(b, pRes); err != nil {
 			*pRes = err
-		}
+		}*/
+		b := make([]byte, res_len) // allocate the memory to store the result.
+		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
+		*pRes = b
 	}
 }
 
@@ -382,7 +382,7 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 					default:
 						argv[i] = reflect.ValueOf(toBytes(s, l))
 					}
-				case C.af_jobject:
+				case C.af_jobject, C.af_jarray:
 					l := int(uintptr(arrArgs[j]))
 					s := (*C.char)(arrArgs[j+1])
 					j += 2
@@ -393,27 +393,9 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 						argv[i] = reflect.ValueOf(toBytes(s, l))
 					default:
 						b := toBytes(s, l)
-						var o map[string]interface{}
+						var o interface{}
 						if json.Unmarshal(b, &o) == nil {
 							argv[i] = reflect.ValueOf(o)
-						} else {
-							argv[i] = reflect.Zero(funArgType)
-						}
-					}
-				case C.af_jarray:
-					l := int(uintptr(arrArgs[j]))
-					s := (*C.char)(arrArgs[j+1])
-					j += 2
-					switch funArgType.Kind() {
-					case reflect.String:
-						argv[i] = reflect.ValueOf(*(toString(s, l)))
-					case reflect.Slice:
-						argv[i] = reflect.ValueOf(toBytes(s, l))
-					default:
-						b := toBytes(s, l)
-						var a []interface{}
-						if json.Unmarshal(b, &a) == nil {
-							argv[i] = reflect.ValueOf(a)
 						} else {
 							argv[i] = reflect.Zero(funArgType)
 						}
@@ -485,15 +467,9 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 	case float32, float64:
 		*res_type = C.rt_double
 		*out_res = C.double2voidp(C.double(resV.Float()))
-	case string:
+	case string, []byte, error:
 		setBuffer(res, out_res, res_type, res_len)
-	case []byte:
-		setBuffer(res, out_res, res_type, res_len)
-	case error:
-		setBuffer(res, out_res, res_type, res_len)
-	case map[string]interface{}:
-		resToJson(res, out_res, res_type, res_len)
-	case []interface{}:
+	case map[string]interface{}, []interface{}:
 		resToJson(res, out_res, res_type, res_len)
 	case *EcmaObject:
 		*res_type = C.rt_func

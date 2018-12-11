@@ -166,14 +166,15 @@ func (ctx *JSEnv) UnregisterFunc(funcName string) error {
  * @param args      any count of array of anything
  * @return any type data
  */
-func (ctx *JSEnv) CallFunc(funcName string, args ...interface{}) interface{} {
+func (ctx *JSEnv) CallFunc(funcName string, args ...interface{}) (interface{}, error) {
 	fn := C.CString(funcName)
 	defer C.free(unsafe.Pointer(fn))
 
 	var res interface{} = nil // pointer to result
+	var ret C.int
 	if args == nil {
 		// no args, call the js function directly which will trigger go_resultReceived()
-		C.js_call_registered_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
+		ret = C.js_call_registered_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
 	} else {
 		// translate the arguments for C.
 		_, fmt, argv := parseArgs(args)
@@ -182,10 +183,10 @@ func (ctx *JSEnv) CallFunc(funcName string, args ...interface{}) interface{} {
 		getBytesPtr(fmt, &f)  // f -> fmt
 		var a *unsafe.Pointer
 		getArgsPtr(argv, &a)  // a -> argv
-		C.js_call_registered_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
+		ret = C.js_call_registered_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
 	}
 
-	return res
+	return parseResult(res, ret)
 }
 
 /**
@@ -194,14 +195,15 @@ func (ctx *JSEnv) CallFunc(funcName string, args ...interface{}) interface{} {
  * @param args        any count of array of anything
  * @return any type data
  */
-func (ctx *JSEnv) CallFileFunc(scriptFile string, args ...interface{}) interface{} {
+func (ctx *JSEnv) CallFileFunc(scriptFile string, args ...interface{}) (interface{}, error) {
 	fn := C.CString(scriptFile)
 	defer C.free(unsafe.Pointer(fn))
 
 	var res interface{} = nil // pointer to result
+	var ret C.int
 	if args == nil {
 		// no args, call the js function directly which will trigger go_resultReceived()
-		C.js_call_file_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
+		ret = C.js_call_file_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
 	} else {
 		// translate the arguments for C.
 		_, fmt, argv := parseArgs(args)
@@ -210,10 +212,10 @@ func (ctx *JSEnv) CallFileFunc(scriptFile string, args ...interface{}) interface
 		getBytesPtr(fmt, &f)  // f -> fmt
 		var a *unsafe.Pointer
 		getArgsPtr(argv, &a)  // a -> argv
-		C.js_call_file_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
+		ret = C.js_call_file_func(ctx.env, fn, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
 	}
 
-	return res
+	return parseResult(res, ret)
 }
 
 /**
@@ -259,11 +261,12 @@ func (ctx *JSEnv) UnregisterGoFunc(funcName string) error {
 	return fromErrorCode(res)
 }
 
-func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) interface{} {
+func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) (interface{}, error) {
 	var res interface{} = nil // pointer to result
+	var ret C.int
 	if args == nil {
 		// no args, call the js function directly which will trigger go_resultReceived()
-		C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
+		ret = C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), (*C.char)(C.NULL), (*unsafe.Pointer)(unsafe.Pointer(nil)))
 	} else {
 		// translate the arguments for C.
 		_, fmt, argv := parseArgs(args)
@@ -272,10 +275,10 @@ func (ctx *JSEnv) CallEcmascriptFunc(ecmaFunc *EcmaObject, args ...interface{}) 
 		getBytesPtr(fmt, &f)  // f -> fmt
 		var a *unsafe.Pointer
 		getArgsPtr(argv, &a)  // a -> argv
-		C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
+		ret = C.js_call_ecmascript_func(ctx.env, ecmaFunc.ecmaObj, (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res), f, a)
 	}
 
-	return res
+	return parseResult(res, ret)
 }
 
 func (ctx *JSEnv) DestroyEcmascriptFunc(ecmaFunc *EcmaObject) {
