@@ -121,6 +121,74 @@ func (ctx *JSEnv) EvalFile(scriptFile string) (interface{}, error) {
 }
 
 /**
+ * check syntax of any lines of JS codes.
+ * @param jsCode  JS codes to be syntax-checked.
+ * @return nil if ok
+ */
+func (ctx *JSEnv) SyntaxCheck(jsCode string) error {
+	var s *C.char
+	var l C.int
+	getStrPtrLen(&jsCode, &s, &l)
+
+	var res interface{} = nil // pointer to result
+	ret := C.js_check_syntax(ctx.env, s, C.size_t(l), (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res))
+	if ret == 0 || res == nil {
+		return nil
+	}
+	switch res.(type) {
+	case error:
+		return res.(error)
+	default:
+		return fromErrorCode(ret)
+	}
+}
+
+/**
+ * check syntax of JS codes in a file.
+ * @param scriptFile  the script file
+ * @return nil if ok.
+ */
+func (ctx *JSEnv) SyntaxCheckFile(scriptFile string) error {
+	f := C.CString(scriptFile)
+	defer C.free(unsafe.Pointer(f))
+
+	var res interface{} = nil // pointer to result
+	ret := C.js_check_syntax_file(ctx.env, f,  (*[0]byte)(C.go_resultReceived), unsafe.Pointer(&res))
+	if ret == 0 || res == nil {
+		return nil
+	}
+	switch res.(type) {
+	case error:
+		return res.(error)
+	default:
+		return fromErrorCode(ret)
+	}
+}
+
+func (ctx *JSEnv) RegisterVar(name string, val interface{}) error {
+	sn := C.CString(name)
+	defer C.free(unsafe.Pointer(sn))
+
+	var p *C.char
+	var pLen C.int
+	var argType C.arg_format_t
+	var arg uint64
+	parseArg(val, &argType, &arg, &p, &pLen)
+
+	args := make([]uint64, 1)
+	var a *unsafe.Pointer
+	switch argType {
+	case C.af_lstring, C.af_buffer, C.af_jobject, C.af_jarray:
+		args[0] = uint64(uintptr(unsafe.Pointer(p)))
+	default:
+		args[0] = arg
+	}
+	getArgsPtr(args, &a)  // a -> args
+	ret := C.js_register_var(ctx.env, sn, argType, a, C.size_t(pLen)) // void** can escape from cgo memory check, void* can't
+	return fromErrorCode(ret)
+}
+
+/**
  * register a function in a JS script file. the function could be called by JSEnv::CallFunc() later.
  * @param scriptFile  the script file containing a function
  * @param funcName    the function name to be registered, which can be different from the name in the scriptFile.

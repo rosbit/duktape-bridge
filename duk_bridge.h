@@ -97,7 +97,28 @@ typedef int (*fn_read_file)(const char *file_name, char **content, size_t *len);
 void js_set_readfile(fn_read_file read_file);
 
 /**
- * register a funtion in JS file as a global function, which could be call by the func_name.
+ * declare a variable with a given val, which could be refered by the name `var_name`.
+ * @param env          the result when calling js_create_env()
+ * @param var_name     the variable name to be refered later
+ * @param val_type     the type of value
+ *                        'n' -> None, val/val_size could be ignored
+ *                        'b' -> boolean, the corresponding value in val could be 1 or 0
+ *                        'i' -> integer, the corresponding value in val is of C int
+ *                        'd' -> double, the corresponding value in val is of C double
+ *                        's' -> string, the corresponding value in val is the address of C z-string
+ *                        'S' -> bytes buffer, val_size and val are length and address of buffer
+ *                        'a' -> JS array, val_size and val are length and address of a string encoded in JSON
+ *                        'o' -> JS object, val_size and val are length and address of a string encoded in JSON
+ * @param val          the value or address of value, depending on val_type.
+ *                        [NOTE] the type of val is `void**`, it is a tricky for Golang to escape memory check.
+ *                        In fact, *val will be used.
+ * @param val_size     the bytes in val, depending on val_type
+ * @return 0 if successfuly, otherwise <0
+ */
+int js_register_var(void *env, const char *var_name, arg_format_t val_type, void **val, size_t val_size);
+
+/**
+ * register a funtion in JS file as a global function, which could be called by the name `func_name`.
  * @param env          the result when calling js_create_env()
  * @param script_file  the JS file name
  * @param func_name    the function name to be refered later
@@ -106,7 +127,7 @@ void js_set_readfile(fn_read_file read_file);
 int js_register_file_func(void *env, const char *script_file, const char *func_name);
 
 /**
- * register a funtion in JS code as a global function, which could be call by the func_name.
+ * register a funtion in JS code as a global function, which could be called by the name `func_name`.
  * @param env          the result when calling js_create_env()
  * @param js_code      the string pointer to JS code.
  * @param len          the length of bytes in js_code
@@ -179,12 +200,33 @@ int js_eval(void *env, const char *js_code, size_t len, fn_call_func_res call_fu
 /**
  * to evaluate(run) JS code in a file
  * @param env           the result when calling js_create_env()
- * @param script_file   the JS file in which the codes wil be run
+ * @param script_file   the JS file in which the codes will be run
  * @param call_func_res the function to receive the result
  * @param udd           the UDD which will be sent to call_func_res()
  * @return 0 if successfuly, otherwise <0
  */
 int js_eval_file(void *env, const char *script_file, fn_call_func_res call_func_res, void *udd);
+
+/**
+ * to check syntax of JS code
+ * @param env       the result when calling js_create_env()
+ * @param js_code   the JS code to check syntax
+ * @param len       the bytes length of js_code
+ * @param call_func_res the function to receive the result
+ * @param udd           the UDD which will be sent to call_func_res()
+ * @return 0 if successfuly, otherwise <0
+ */
+int js_check_syntax(void *env, const char *js_code, size_t len, fn_call_func_res call_func_res, void *udd);
+
+/**
+ * to check syntax of JS code in a file
+ * @param env           the result when calling js_create_env()
+ * @param script_file   the JS file in which the codes will be checked syntax
+ * @param call_func_res the function to receive the result
+ * @param udd           the UDD which will be sent to call_func_res()
+ * @return 0 if successfuly, otherwise <0
+ */
+int js_check_syntax_file(void *env, const char *script_file, fn_call_func_res call_func_res, void *udd);
 
 /* ====================  registering global function related =================== */
 /**

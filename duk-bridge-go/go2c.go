@@ -129,6 +129,75 @@ func uint64_2double(p uint64) float64 {
 	return *(*float64)(unsafe.Pointer(&p))
 }
 
+func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char, pLen *C.int) {
+	if arg == nil {
+		*argType = C.af_none
+		*val = uint64(0)
+		return
+	}
+	v := reflect.ValueOf(arg)
+
+	switch arg.(type) {
+	case bool:
+		*argType = C.af_bool
+		if arg.(bool) {
+			*val = uint64(1)
+		} else {
+			*val = uint64(0)
+		}
+	case int, int8, int16, int32:
+		*argType = C.af_int
+		*val = uint64(v.Int())
+	case int64:
+		*argType = C.af_double
+		f := float64(arg.(int64))
+		*val = double2uint64(f)
+	case uint8, uint16:
+		*argType = C.af_int
+		*val = v.Uint()
+	case uint, uint32, uint64:
+		*argType = C.af_double
+		f := float64(v.Uint())
+		*val = double2uint64(f)
+	case float32, float64:
+		*argType = C.af_double
+		f := v.Float()
+		*val = double2uint64(f)
+	case string:
+		*argType = C.af_lstring
+		s := arg.(string)
+		getStrPtrLen(&s, p, pLen)
+	case []byte:
+		*argType = C.af_buffer
+		getBytesPtrLen(arg.([]byte), p, pLen)
+	case []interface{}:
+		if argToJson(arg, p, pLen) {
+			*argType = C.af_jarray
+		} else {
+			*argType = C.af_none
+			*val = uint64(0)
+		}
+	case map[string]interface{}:
+		if argToJson(arg, p, pLen) {
+			*argType = C.af_jobject
+		} else {
+			*argType = C.af_none
+			*val = uint64(0)
+		}
+	case *EcmaObject:
+		*argType = C.af_ecmafunc
+		eo := arg.(*EcmaObject)
+		*val = uint64(uintptr(eo.ecmaObj))
+	default:
+		if argToJson(arg, p, pLen) {
+			*argType = C.af_jobject
+		} else {
+			*argType = C.af_none
+			*val = uint64(0)
+		}
+	}
+}
+
 func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 	nargs = len(args)
 	fmt = make([]byte, nargs+1)    // char *fmt in C
@@ -138,98 +207,19 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 	j := 0  // subscript index of argv
 	var p *C.char
 	var pLen C.int
+	var argType C.arg_format_t
+	var val uint64
 	for i,arg := range args {
-		if arg == nil {
-			fmt[i] = C.af_none
-			argv[j] = uint64(0)
-			j += 1
-			continue
-		}
-		v := reflect.ValueOf(arg)
-
-		switch arg.(type) {
-		case bool:
-			fmt[i] = C.af_bool
-			if arg.(bool) {
-				argv[j] = uint64(1)
-			} else {
-				argv[j] = uint64(0)
-			}
-			j += 1
-		case int, int8, int16, int32:
-			fmt[i] = C.af_int
-			argv[j] = uint64(v.Int())
-			j += 1
-		case int64:
-			fmt[i] = C.af_double
-			f := float64(arg.(int64))
-			argv[j] = double2uint64(f)
-			j += 1
-		case uint8, uint16:
-			fmt[i] = C.af_int
-			argv[j] = v.Uint()
-			j += 1
-		case uint, uint32, uint64:
-			fmt[i] = C.af_double
-			f := float64(v.Uint())
-			argv[j] = double2uint64(f)
-			j += 1
-		case float32, float64:
-			fmt[i] = C.af_double
-			f := v.Float()
-			argv[j] = double2uint64(f)
-			j += 1
-		case string:
-			fmt[i] = C.af_lstring
-			s := arg.(string)
-			getStrPtrLen(&s, &p, &pLen)
+		parseArg(arg, &argType, &val, &p, &pLen)
+		fmt[i] = byte(argType)
+		switch argType {
+		case C.af_lstring, C.af_buffer, C.af_jobject, C.af_jarray:
 			argv[j] = uint64(pLen)
 			argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
 			j += 2
-		case []byte:
-			fmt[i] = C.af_buffer
-			getBytesPtrLen(arg.([]byte), &p, &pLen)
-			argv[j] = uint64(pLen)
-			argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
-			j += 2
-		case []interface{}:
-			if argToJson(arg, &p, &pLen) {
-				fmt[i] = C.af_jarray
-				argv[j] = uint64(pLen)
-				argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
-				j += 2
-			} else {
-				fmt[i] = C.af_none
-				argv[j] = uint64(0)
-				j += 1
-			}
-		case map[string]interface{}:
-			if argToJson(arg, &p, &pLen) {
-				fmt[i] = C.af_jobject
-				argv[j] = uint64(pLen)
-				argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
-				j += 2
-			} else {
-				fmt[i] = C.af_none
-				argv[j] = uint64(0)
-				j += 1
-			}
-		case *EcmaObject:
-			fmt[i] = C.af_ecmafunc
-			eo := arg.(*EcmaObject)
-			argv[j] = uint64(uintptr(eo.ecmaObj))
-			j += 1
 		default:
-			if argToJson(arg, &p, &pLen) {
-				fmt[i] = C.af_jobject
-				argv[j] = uint64(pLen)
-				argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
-				j += 2
-			} else {
-				fmt[i] = C.af_none
-				argv[j] = uint64(0)
-				j += 1
-			}
+			argv[j] = val
+			j += 1
 		}
 	}
 

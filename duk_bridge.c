@@ -489,7 +489,18 @@ void js_destroy_env(void *env)
 	duk_destroy_heap(ctx);
 }
 
-int js_register_code_func(void *env, const char *js_code, size_t len, const char *func_name) {
+int js_register_var(void *env, const char *var_name, arg_format_t val_type, void **val, size_t val_size)
+{
+	duk_context *ctx = (duk_context*)env;
+	duk_push_global_object(ctx); // [ global ]
+	module_attr_t attr = {var_name, val_type, *val, val_size};
+	js_add_module_attr(env, &attr);
+	duk_pop(ctx);
+	return 0;
+}
+
+int js_register_code_func(void *env, const char *js_code, size_t len, const char *func_name)
+{
 	duk_context *ctx = (duk_context*)env;
 
 	duk_push_global_object(ctx);        // [ global ]
@@ -545,7 +556,8 @@ int js_register_file_func(void *env, const char *script_file, const char *func_n
 	return 0;
 }
 
-int js_unregister_func(void *env, const char *func_name) {
+int js_unregister_func(void *env, const char *func_name)
+{
 	duk_context *ctx = (duk_context*)env;
 	duk_push_global_object(ctx);        // [ global ]
 	int rc = duk_del_prop_string(ctx, -1, func_name);
@@ -745,13 +757,46 @@ int js_eval_file(void *env, const char *script_file, fn_call_func_res call_func_
 		}
 		return ret;
 	}
-	ret = duk_peval_lstring(ctx, src, size);
+
+	ret = js_eval(env, src, size, call_func_res, udd);
 	free(src);
+	return ret;
+}
+
+int js_check_syntax(void *env, const char *js_code, size_t len, fn_call_func_res call_func_res, void *udd)
+{
+	duk_context *ctx = (duk_context*)env;
+	duk_int_t ret = duk_pcompile_lstring(ctx, 0, js_code, len); // [ retval ]
 	if (call_func_res != NULL) {
+		if (ret == 0) {
+			// syntax ok, return undefined
+			duk_push_undefined(ctx);
+			duk_remove(ctx, -2);
+		} 
 		call_result_callback(ctx, call_func_res, udd);
 	}
 	duk_pop(ctx);
-	return (ret == 0) ? 0 : -10;
+	return (ret == 0) ? 0: -1;
+}
+
+int js_check_syntax_file(void *env, const char *script_file, fn_call_func_res call_func_res, void *udd)
+{
+	duk_context *ctx = (duk_context*)env;
+	char *src;
+	size_t size;
+	int ret = readFileContent(script_file, &src, &size);
+	if (ret != 0) {
+		if (ret == -1 && call_func_res != NULL) {
+			duk_push_error_object(ctx, DUK_ERR_ERROR, "%s not found", script_file);
+			call_result_callback(ctx, call_func_res, udd);
+			duk_pop(ctx);
+		}
+		return ret;
+	}
+
+	ret = js_check_syntax(env, src, size, call_func_res, udd);
+	free(src);
+	return ret;
 }
 
 static duk_ret_t native_func_bridge(duk_context *ctx)
