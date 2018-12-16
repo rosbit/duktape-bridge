@@ -672,6 +672,11 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 			s = (char*)argv[i++];
 			duk_push_lstring(ctx, s, l);
 			break;
+		case af_error:
+			l = (size_t)argv[i++];
+			s = (char*)argv[i++];
+			duk_generic_error(ctx, "%.*s", (int)l, s);
+			break;
 		case af_buffer:
 			l = (size_t)argv[i++];
 			s = (char*)argv[i++];

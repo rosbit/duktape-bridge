@@ -188,6 +188,10 @@ func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char,
 		*argType = C.af_ecmafunc
 		eo := arg.(*EcmaObject)
 		*val = uint64(uintptr(eo.ecmaObj))
+	case error:
+		*argType = C.af_error
+		s := arg.(error).Error()
+		getStrPtrLen(&s, p, pLen)
 	default:
 		if argToJson(arg, p, pLen) {
 			*argType = C.af_jobject
