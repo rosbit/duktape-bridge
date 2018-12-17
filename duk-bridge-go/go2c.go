@@ -169,7 +169,7 @@ func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char,
 		*argType = C.af_buffer
 		getBytesPtrLen(arg.([]byte), p, &len)
 		*pLen = C.size_t(len)
-	case []interface{}:
+	case []string, []interface{}:
 		if argToJson(arg, p, &len) {
 			*argType = C.af_jarray
 			*pLen = C.size_t(len)
@@ -473,7 +473,7 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		*out_res = C.double2voidp(C.double(resV.Float()))
 	case string, []byte, error:
 		setBuffer(res, out_res, res_type, res_len)
-	case map[string][]string, map[string]interface{}, []interface{}:
+	case map[string][]string, map[string]interface{}, []string, []interface{}:
 		resToJson(res, out_res, res_type, res_len)
 	case *EcmaObject:
 		*res_type = C.rt_func
