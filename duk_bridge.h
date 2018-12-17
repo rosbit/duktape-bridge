@@ -25,6 +25,7 @@ typedef enum {
 	af_jobject = 'o',
 	af_ecmafunc= 'F',
 	af_error   = 'E',
+	af_mobject = 'O'
 } arg_format_t;
 
 /** type value for describe fn_native_func() argument `res` */
@@ -39,6 +40,7 @@ typedef enum {
 	rt_array,  // same as rt_object, but the JSON string is converted from array.
 	rt_func,   // ecmascript function object.
 	rt_error,  // error object
+	rt_mobject,// module object
 	total_rt
 } res_type_t;
 
@@ -382,25 +384,26 @@ void js_add_module_method(void *env, module_method_t *method);
 void js_add_module_attr(void *env, module_attr_t *attr);
 
 /**
- * create a ecmascript module which can be used as a ecmascript function arguement.
+ * create a ecmascript module instance which can be used as a ecmascript function arguement
+ * or as a returned value of native function.
+ * @param env              the result when calling js_create_env()
+ * @param udd              user defined data
+ * @return 0 if successful, otherwise < 0
+ */
+typedef int (*fn_create_ecmascript_instance)(void *env, void *udd);
+
+/**
+ * create a ecmascript module instance which can be used as a ecmascript function arguement
+ * or as a returned value of native function.
  * @param env              the result when calling js_create_env()
  * @param udd              argument which will be transfered to get_methods_list()/get_attrs_list()/finalizer()
  * @param mod_handle       as an argument of get_methods_list()/get_attr_list()/finalizer()
  * @param get_methods_list the function to return the methods list
  * @param get_attrs_list   the function to return the attributes list
  * @param finalizer        the function when the module instance reaches the end of its scope.
- * @return  non-NULL if successful, otherwise NULL.
- *          The non-NULL result can be used as a ecmascript function.
- *          Release it by calling js_destroy_ecmascript_module() when it is not used any more.
+ * @return  0 if successful, otherwise < 0.
  */
-void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
-
-/**
- * destroy module created by calling js_create_ecmascript_module()
- * @param env     the result when calling js_create_env()
- * @param module  the result of js_create_ecmascript_module()
- */
-#define js_destroy_ecmascript_module(env, module) js_destroy_ecmascript_obj(env, module)
+int js_create_ecmascript_object(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer);
 
 #ifdef __cplusplus
 }

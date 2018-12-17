@@ -45,7 +45,7 @@ var (
 )
 
 // go function with a js function type as a argument
-func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
+func jsCallback(jsFunc *js.EcmaObject) *testDukModule {
 	defer jsEnv.DestroyEcmascriptFunc(jsFunc)
 
 	res, err := jsEnv.CallEcmascriptFunc(jsFunc, []byte("string from duk-bridge-go"))
@@ -55,7 +55,7 @@ func jsCallback(jsFunc *js.EcmaObject) *js.EcmaObject {
 		handleCallFuncResult(res)
 	}
 
-	return m
+	return &testDukModule{}
 }
 
 type testDukModule struct {}
@@ -177,7 +177,6 @@ func main() {
 		}
 		jsEnv.RegisterGoFunc("adder", adder)
 		jsEnv.RegisterGoFunc("jsCallback", jsCallback)
-		m, _ = jsEnv.CreateEcmascriptModule(&testDukModule{})
 
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gofunc() ----------\n")
@@ -190,7 +189,6 @@ func main() {
 		jsEnv.UnregisterGoFunc("toJson")
 		jsEnv.UnregisterGoFunc("adder")
 		jsEnv.UnregisterGoFunc("jsCallback")
-		jsEnv.DestroyEcmascriptModule(m)
 	case "-gomodule":
 		for i:=2; i<argc; i++ {
 			fmt.Printf("----------- gomodule() ----------\n")

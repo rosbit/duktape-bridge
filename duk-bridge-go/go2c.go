@@ -9,6 +9,7 @@ package duk_bridge
 #include "duk_bridge.h"
 #include <string.h>
 #include <stdlib.h>
+extern int go_createEcmascriptObject(void*, void*);
 */
 import "C"
 
@@ -100,11 +101,6 @@ func go_resultReceived(udd unsafe.Pointer, res_type C.int, res unsafe.Pointer, r
 	default:
 		fallthrough
 	case C.rt_buffer, C.rt_object, C.rt_array:
-		/*
-		b := toBytes((*C.char)(res), int(res_len))
-		if err := json.Unmarshal(b, pRes); err != nil {
-			*pRes = err
-		}*/
 		b := make([]byte, res_len) // allocate the memory to store the result.
 		bs := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 		C.memcpy(unsafe.Pointer(bs.Data), unsafe.Pointer(res), res_len)
@@ -129,13 +125,14 @@ func uint64_2double(p uint64) float64 {
 	return *(*float64)(unsafe.Pointer(&p))
 }
 
-func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char, pLen *C.int) {
+func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char, pLen *C.size_t) {
 	if arg == nil {
 		*argType = C.af_none
 		*val = uint64(0)
 		return
 	}
 	v := reflect.ValueOf(arg)
+	var len C.int
 
 	switch arg.(type) {
 	case bool:
@@ -166,20 +163,24 @@ func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char,
 	case string:
 		*argType = C.af_lstring
 		s := arg.(string)
-		getStrPtrLen(&s, p, pLen)
+		getStrPtrLen(&s, p, &len)
+		*pLen = C.size_t(len)
 	case []byte:
 		*argType = C.af_buffer
-		getBytesPtrLen(arg.([]byte), p, pLen)
+		getBytesPtrLen(arg.([]byte), p, &len)
+		*pLen = C.size_t(len)
 	case []interface{}:
-		if argToJson(arg, p, pLen) {
+		if argToJson(arg, p, &len) {
 			*argType = C.af_jarray
+			*pLen = C.size_t(len)
 		} else {
 			*argType = C.af_none
 			*val = uint64(0)
 		}
 	case map[string][]string, map[string]interface{}:
-		if argToJson(arg, p, pLen) {
+		if argToJson(arg, p, &len) {
 			*argType = C.af_jobject
+			*pLen = C.size_t(len)
 		} else {
 			*argType = C.af_none
 			*val = uint64(0)
@@ -191,10 +192,19 @@ func parseArg(arg interface{}, argType *C.arg_format_t, val *uint64, p **C.char,
 	case error:
 		*argType = C.af_error
 		s := arg.(error).Error()
-		getStrPtrLen(&s, p, pLen)
+		getStrPtrLen(&s, p, &len)
+		*pLen = C.size_t(len)
 	default:
-		if argToJson(arg, p, pLen) {
+		if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
+			*argType = C.af_mobject
+			*p = (*C.char)(unsafe.Pointer((*[0]byte)(C.go_createEcmascriptObject)))
+			modKey, _ := createMethodKeys(arg, v)
+			*pLen = C.size_t(modKey)
+			break
+		}
+		if argToJson(arg, p, &len) {
 			*argType = C.af_jobject
+			*pLen = C.size_t(len)
 		} else {
 			*argType = C.af_none
 			*val = uint64(0)
@@ -210,14 +220,14 @@ func parseArgs(args []interface{}) (nargs int, fmt[]byte, argv []uint64) {
 
 	j := 0  // subscript index of argv
 	var p *C.char
-	var pLen C.int
+	var pLen C.size_t
 	var argType C.arg_format_t
 	var val uint64
 	for i,arg := range args {
 		parseArg(arg, &argType, &val, &p, &pLen)
 		fmt[i] = byte(argType)
 		switch argType {
-		case C.af_lstring, C.af_buffer, C.af_jobject, C.af_jarray:
+		case C.af_lstring, C.af_buffer, C.af_jobject, C.af_jarray, C.af_mobject:
 			argv[j] = uint64(pLen)
 			argv[j+1] = uint64(uintptr(unsafe.Pointer(p)))
 			j += 2
@@ -470,6 +480,13 @@ func callGoFunc(fun reflect.Value, ft *C.char, args *unsafe.Pointer, out_res *un
 		eo := res.(*EcmaObject)
 		*out_res = eo.ecmaObj
 	default:
+		if resV.Kind() == reflect.Ptr && resV.Elem().Kind() == reflect.Struct {
+			*res_type = C.rt_mobject
+			*out_res = unsafe.Pointer((*[0]byte)(C.go_createEcmascriptObject))
+			modKey, _ := createMethodKeys(res, resV)
+			*res_len = C.size_t(modKey)
+			break
+		}
 		*res_type = C.rt_none
 		*out_res = unsafe.Pointer(uintptr(0))
 	}

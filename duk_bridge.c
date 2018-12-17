@@ -645,6 +645,8 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 	int d;
 	int i = 0;
 	unsigned long func_index;
+	void *objUdd;
+	fn_create_ecmascript_instance create_ecmascript_instance;
 	while (*fmt) {
 		argc++;
 		switch (*fmt++) {
@@ -688,6 +690,13 @@ static int push_args_and_call_func(duk_context *ctx, const char *func_name, fn_c
 		case af_ecmafunc:
 			func_index = (unsigned long)argv[i++];
 			load_object(ctx, func_index); // now the top ctx is [ func ]
+			break;
+		case af_mobject:
+			objUdd = argv[i++];
+			create_ecmascript_instance = (fn_create_ecmascript_instance)argv[i++];
+			if (create_ecmascript_instance == NULL || create_ecmascript_instance(ctx, objUdd) != 0) {
+				duk_push_undefined(ctx);
+			}
 			break;
 		case af_jarray:
 		case af_jobject:
@@ -923,6 +932,15 @@ static duk_ret_t native_func_bridge(duk_context *ctx)
 		return 1;
 	case rt_error:
 		return duk_generic_error(ctx, "%.*s", (int)res_len, (const char*)cb_res);
+	case rt_mobject:
+		{
+			fn_create_ecmascript_instance create_ecmascript_instance = (fn_create_ecmascript_instance)cb_res;
+			void *udd = (void*)res_len;
+			if (create_ecmascript_instance == NULL || create_ecmascript_instance(ctx, udd) != 0) {
+				duk_push_undefined(ctx);
+			}
+			return 1;
+		}
 	case rt_object:
 	case rt_array:
 	default:
@@ -1046,17 +1064,15 @@ void js_add_module_loader(void *env, void *udd, const char *mod_ext, fn_load_mod
 	duk_pop(ctx);
 }
 
-void* js_create_ecmascript_module(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
+int js_create_ecmascript_object(void *env, void *udd, void *mod_handle, fn_get_methods_list get_methods_list, fn_get_attrs_list get_attrs_list, fn_module_finalizer finalizer)
 {
 	duk_context *ctx = (duk_context*)env;
 	int ret = init_native_obj(ctx, udd, (const char*)mod_handle, NULL, NULL, NULL, get_methods_list, get_attrs_list, finalizer);
-	unsigned long func_index;
 	switch (ret) {
 	case init_obj_ok:
-		func_index = save_top_object(ctx);
-		return (void*)func_index;
+		return 0;
 	case failed_to_init_obj:
 	default:
-		return NULL;
+		return -1;
 	}
 }

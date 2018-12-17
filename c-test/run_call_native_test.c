@@ -138,6 +138,10 @@ static void finalizer(void *udd, const char *mod_name, void *mod_handle)
 	printf("finalizer %s called\n", mod_name);
 }
 
+static int create_ecmascript_instance(void *env, void *udd) {
+	return js_create_ecmascript_object(env, NULL, NULL, get_methods, get_attrs, finalizer);
+}
+
 static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res_type_t *res_type, size_t *res_len, fn_free_res *free_res)
 {
 	if (fmt == NULL || *fmt == '\0' || fmt[0] != af_ecmafunc) {
@@ -151,13 +155,14 @@ static void jsCallback(void* udd, const char* fmt, void *args[], void **res, res
 	
 	void *ecmafunc = args[0]; // if ecmafunc was saved, it could be called times and times again
 	// call js func
-	void *m = js_create_ecmascript_module(env, NULL, NULL, get_methods, get_attrs, finalizer);
+	void *m[2];
+	m[0] = NULL;
+	m[1] = create_ecmascript_instance;
 
 	//void* a = (void*)100;
 	//js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "i", &a);
-	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "F", &m);
+	js_call_ecmascript_func(udd, ecmafunc, func_res, NULL, "O", m);
 	js_destroy_ecmascript_func(env, ecmafunc);
-	js_destroy_ecmascript_module(env, m);
 
 	*res_type = rt_int;
 	*res = (void*)(long)10000;

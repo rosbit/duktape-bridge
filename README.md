@@ -133,6 +133,7 @@ must meet some satisfications:
  - string and []byte are acceptable
  - array slice of primitive types and string are acceptable. e.g. []bool, []int
  - map with string as the key type is acceptable. e.g. map[string]interface{}
+ - a pointer of struct is acceptable, which will be converted to a js class instance
  - the returned result can contains at most 2 result. If it has 2 results, the 2nd
    one must be type `error`. The non-nil error will cause a js exception.
 

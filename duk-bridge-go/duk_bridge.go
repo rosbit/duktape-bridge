@@ -48,6 +48,7 @@ func NewEnv(loader GoModuleLoader) *JSEnv {
  * destory a JS environment.
  */
 func (ctx *JSEnv) Destroy() {
+	delete(_firstLoaderKey, ctx.env)
 	C.js_destroy_env(ctx.env)
 	if ctx.loaderKey != nil {
 		for i:=0; i<len(ctx.loaderKey); i++ {
@@ -170,7 +171,7 @@ func (ctx *JSEnv) RegisterVar(name string, val interface{}) error {
 	defer C.free(unsafe.Pointer(sn))
 
 	var p *C.char
-	var pLen C.int
+	var pLen C.size_t
 	var argType C.arg_format_t
 	var arg uint64
 	parseArg(val, &argType, &arg, &p, &pLen)
@@ -353,10 +354,3 @@ func (ctx *JSEnv) DestroyEcmascriptFunc(ecmaFunc *EcmaObject) {
 	ecmaFunc.destroy(ctx.env)
 }
 
-func (ctx *JSEnv) CreateEcmascriptModule(structPtr interface{}) (*EcmaObject, error) {
-	return ctx.struct2EcmaModule(structPtr)
-}
-
-func (ctx *JSEnv) DestroyEcmascriptModule(module *EcmaObject) {
-	module.destroy(ctx.env)
-}
