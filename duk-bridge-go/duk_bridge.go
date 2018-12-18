@@ -8,6 +8,7 @@ package duk_bridge
 /*
 #cgo CFLAGS: -I.. -I../duktape
 #cgo LDFLAGS: -ldl -lm
+#cgo darwin CFLAGS: -DDarwin
 #include "duk_bridge.h"
 #include <string.h>
 #include <stdlib.h>
