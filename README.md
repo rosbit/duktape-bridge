@@ -19,7 +19,9 @@ from Go function to JavaScript function.
 
 The Go bridge can also make your Go package to a Duktape JavaScript module. So
 what you can do is just writing `var mod = require('your_module')`, your Go package is
-ready to be called by JS. See sample application [gojs](https://github.com/rosbit/gojs).
+ready to be called by JS. See sample application [jsgo](https://github.com/rosbit/jsgo),
+which is a **standalone** executable, but can be used as a **js interpreter** or even
+a mini node.js container.
 
 ### Usage
 
