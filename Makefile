@@ -17,6 +17,9 @@ duk_bridge.so: duk_bridge.o $(OBJS)
 
 duk_bridge.o: duk_bridge.c duk_bridge.h
 
+duk_bridge.c:
+	./gen-link.sh
+
 .c.o:
 	$(CC) -fPIC -o $@ -c $< -Iduktape
 

@@ -13,6 +13,9 @@ import (
 type GoPluginModuleLoader struct{}
 
 const _ext = ".so"
+
+func (loader *GoPluginModuleLoader) SetJSEnv(_ *JSEnv) () {}
+
 func (loader *GoPluginModuleLoader) GetExtName() string {
 	return _ext;
 }

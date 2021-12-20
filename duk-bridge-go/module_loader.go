@@ -32,6 +32,7 @@ import (
 )
 
 type GoModuleLoader interface {
+	SetJSEnv(*JSEnv)
 	GetExtName() string
 	LoadModule(modHome string, modName string) interface{}
 	FinalizeModule(modName string, modHandler interface{})
@@ -251,6 +252,7 @@ func (ctx *JSEnv) addGoModuleLoader(loader GoModuleLoader) {
 	}
 	ctx.loaderKey = append(ctx.loaderKey, loaderKey)
 
+	loader.SetJSEnv(ctx)
 	ext := loader.GetExtName()
 	s := C.CString(ext)
 	defer C.free(unsafe.Pointer(s))

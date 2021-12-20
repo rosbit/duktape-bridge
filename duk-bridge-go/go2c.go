@@ -58,7 +58,7 @@ func toBytes(chunk *C.char, length int) []byte {
 
 func toString(chuck *C.char, length int) *string {
 	var s string
-    v := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	v := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	v.Data = uintptr(unsafe.Pointer(chuck))
 	v.Len = int(length)
 	return &s
